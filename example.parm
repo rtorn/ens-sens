@@ -32,7 +32,7 @@ kinetic_energy_metric=False
 calc_steer_circ=True
 calc_pv250hPa=True
 calc_the700hPa=True
-calc_q500-850hPa=True
+calc_q500-850hPa=False
 min_lat=0.0
 max_lat=65.0
 min_lon=-180.0
@@ -57,5 +57,3 @@ range_rings=False
 ring_values=[300,600,900,1200]
 output_sens=True
 nhc_sens=True
-
-
