@@ -12,68 +12,6 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 
-class CopyFiles:
-    def __init__(self, src, dest):
-        self.src = src
-        self.dest = dest
-
-    def copy_filestowork(self):
-        is_transfered = False
-
-        try:
-            src_files = os.listdir(self.src)
-            for file_name in src_files:
-                full_file_name = os.path.join(self.src, file_name)
-                if os.path.isfile(full_file_name):
-                    shutil.copy(full_file_name, self.dest)
-            dest_files = os.listdir(self.dest)
-            if len(dest_files) == len(src_files):
-                print("Copy Complete!!!")
-                is_transfered = True
-
-            else:
-                print("All files not copied.")
-        except OSError as err:
-            print(err)
-            sys.exit(2)
-
-        return is_transfered
-
-    def checkandcreatedir(self):
-        isdir = False
-        if not os.path.isdir(self.dest):
-            try:
-                os.makedirs(self.dest)
-                isdir = True
-            except OSError as e:
-                raise e
-
-        else:
-            try:
-                shutil.rmtree(self.dest)
-                try:
-                    os.makedirs(self.dest)
-                    print("Old Directory is removed and new has been created.")
-                    isdir = True
-                except OSError as e:
-                    print(e)
-            except shutil.Error as err:
-                print(err)
-
-        return isdir
-
-    @staticmethod
-    def check_file_exists(filename):
-        isfile = False
-        try:
-            if os.path.isfile(filename):
-                isfile = True
-        except Exception as err:
-            print(err)
-
-        return isfile
-
-
 class CopyGribFiles:
     def __init__(self, datea, config):
 
