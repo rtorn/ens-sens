@@ -12,102 +12,84 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 
-class CopyGribFiles:
-    def __init__(self, datea, config):
+def stage_grib_files(datea, config):
 
-        self.src = config['model_dir']
-        self.dest = config['work_dir']
-        self.freq = config.get('fcst_hour_int', 12)
-        self.fmax = config.get('fcst_hour_max', 120)
-        self.init = datea
+    '''
+    This is a generic class for copying or linking grib file data from a specific location
+    to a directory where calculations are performed.  No matter where these calculations are
+    carried out, this routine must exist.
 
-        #  Make the work directory if it does not exist
-        if not os.path.isdir(self.dest):
-           try:
-              os.makedirs(self.dest)
-           except OSError as e:
-              raise e
+    This particular instance employs GEFS OpeNDAP data that is on NCEP servers.  As a 
+    consequence, this routine is a placeholder and does not need to do anything.
 
-class CopyATCFFiles:
-    def __init__(self, datea, bbnnyyyy, config):
+    Attributes:
+        datea (string):  The initialization time of the forecast (yyyymmddhh)
+        config  (dict):  The dictionary with configuration information
+    '''
 
-        self.src = config['atcf_dir'] + "/a" + bbnnyyyy + ".dat.gz"
-        self.dest = config['work_dir']
-        self.init = datea
-        self.nens = int(config['num_ens'])
-        self.bbnnyyyy = bbnnyyyy
+    #  Make the work directory if it does not exist
+    if not os.path.isdir(config['work_dir']):
+       try:
+          os.makedirs(config['work_dir'])
+       except OSError as e:
+          raise e
 
-        #  Wait for the source file to be present
-#        urllib.request.urlretrieve(self.src,self.dest + "/a" + bbnnyyyy + ".dat.gz")
-#        while not os.path.exists(self.dest + "/a" + bbnnyyyy + ".dat.gz"):
-#           time.sleep(20.5)
-#           urllib.request.urlretrieve(self.src,self.dest + "/a" + bbnnyyyy + ".dat.gz")
 
-        gzfile = gzip.GzipFile(fileobj=urllib.request.urlopen(self.src))
-        uzfile = open(self.dest + '/a' + bbnnyyyy + '.dat', 'wb')
-        uzfile.write(gzfile.read())        
+def stage_atcf_files(datea, bbnnyyyy, config):
+    '''
+    This is a generic class for copying or linking ATCF file data from a specific location
+    to a directory where calculations are performed.  No matter where these calculations are
+    carried out, this routine must exist.
 
-#        gzfile = gzip.GzipFile(self.dest + "/a" + bbnnyyyy + ".dat.gz", 'rb')
-#        uzfile = open(self.dest + '/a' + bbnnyyyy + '.dat', 'wb')       
-#        uzfile.write(gzfile.read())
-        gzfile.close()
-        uzfile.close()
+    The result is a set of ATCF files in the work directory of the format atcf_NN.dat,
+    where NN is the ensemble member number.
 
-        #  Wait for the ensemble ATCF information to be placed in the file
-#        while ( len(os.popen("sed -ne /" + self.init + "/p " + self.dest + "/a" + bbnnyyyy + ".dat | sed -ne /EE/p").read()) == 0 ):
-#           time.sleep(20.7)
+    This particular instance is for GEFS data that is on the NHC FTP server. In this
+    case, all ATCF data for a particular storm is in one file, so the code unzips and
+    reads the storm file, then uses sed to get the lines attributed to each
+    ensemble member and places that data in a seperate file.
 
-        #  Wait for the file to be finished being copied
-#        while ( (time.time() - os.path.getmtime(self.src)) < 60 ):
-#           time.sleep(10)
+    Attributes:
+        datea (string):  The initialization time of the forecast (yyyymmddhh)
+        config  (dict):  The dictionary with configuration information
+    '''
 
-        self.checkandcreatedir()
-        self.copy_filestowork()
+    src  = config['atcf_dir'] + "/a" + bbnnyyyy + ".dat.gz"
+    nens = int(config['num_ens'])
 
-    ####  Function to copy the TC ATCF file from the source to the work directory
-    def copy_filestowork(self):
-        is_transfered = False
+    #  Unzip the file from the NHC server, write the file to the work directory
+    gzfile = gzip.GzipFile(fileobj=urllib.request.urlopen(src))
+    uzfile = open(config['work_dir'] + '/a' + bbnnyyyy + '.dat', 'wb')
+    uzfile.write(gzfile.read())        
+    gzfile.close()
+    uzfile.close()
 
-        for n in range(self.nens + 1):
+    #  Wait for the ensemble ATCF information to be placed in the file
+#    while ( len(os.popen("sed -ne /" + self.init + "/p " + self.dest + "/a" + bbnnyyyy + ".dat | sed -ne /EE/p").read()) == 0 ):
+#       time.sleep(20.7)
 
-           if ( n > 0 ):
-              modid = 'AP'
-           else:
-              modid = 'AC'
+    #  Wait for the file to be finished being copied
+#    while ( (time.time() - os.path.getmtime(self.src)) < 60 ):
+#       time.sleep(10)
 
-           nn = '%0.2i' % n
-           file_name = self.dest + "/atcf_" + nn + ".dat"
+    for n in range(nens + 1):
 
-           if not self.__check_file_exists(file_name):
+       if ( n > 0 ):
+          modid = 'AP'
+       else:
+          modid = 'AC'
 
-              fo = open(file_name,"w")
-              fo.write(os.popen("sed -ne /" + self.init + "/p " + self.dest + "/a" + self.bbnnyyyy + ".dat | sed -ne /" + modid + nn + "/p").read())
-              fo.close()
+       nn = '%0.2i' % n
+       file_name = config['work_dir'] + "/atcf_" + nn + ".dat"
 
-        return is_transfered
+       #  If the specific member's ATCF file does not exist, copy from the source file with sed.
+       if not os.path.isfile(file_name):
 
-    def checkandcreatedir(self):
-        isdir = False
-        if not os.path.isdir(self.dest):
-            try:
-                os.makedirs(self.dest)
-                isdir = True
-            except OSError as e:
-                raise e
+          fo = open(file_name,"w")
+          fo.write(os.popen("sed -ne /" + datea + "/p " + config['work_dir'] + "/a" + bbnnyyyy + ".dat | sed -ne /" + modid + nn + "/p").read())
+          fo.close()
 
-        return isdir
-
-    @staticmethod
-    def __check_file_exists(filename):
-        isfile = False
-        try:
-            if os.path.isfile(filename):
-                isfile = True
-        except Exception as err:
-            print(err)
-
-        return isfile
-
+ 
 #  Class to read information from ensemble grib files
 class ReadGribFiles:
     def __init__(self, datea, fhr, config):

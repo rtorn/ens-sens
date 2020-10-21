@@ -9,119 +9,106 @@ import pandas as pd
 import numpy as np
 import xarray as xr
 
-class CopyGribFiles:
-    def __init__(self, datea, config):
+def stage_grib_files(datea, config):
 
-        self.src = config['model_dir']
-        self.dest = config['work_dir']
-        self.freq = config.get('fcst_hour_int', 12)
-        self.fmax = config.get('fcst_hour_max', 120)
-        self.init = datea
+    '''
+    This is a generic class for copying or linking grib file data from a specific location
+    to a directory where calculations are performed.  No matter where these calculations are
+    carried out, this routine must exist.
+ 
+    This particular instance is for ECMWF data on the machine teton at UAlbany.  In this 
+    case, the grib files are linked to files that are located in another directory on that
+    machine.
 
-        #  Make the work directory if it does not exist
-        if not os.path.isdir(self.dest):
-           try:
-              os.makedirs(self.dest)
-           except OSError as e:
-              raise e
+    Attributes:
+        datea (string):  The initialization time of the forecast (yyyymmddhh)
+        config  (dict):  The dictionary with configuration information
+    '''
 
-        self.link_filestowork()
+    freq = config.get('fcst_hour_int', 12)
+    fmax = config.get('fcst_hour_max', 120)
+
+    #  Make the work directory if it does not exist
+    if not os.path.isdir(config['work_dir']):
+       try:
+          os.makedirs(config['work_dir'])
+       except OSError as e:
+          raise e
+
+    init   = dt.datetime.strptime(datea, '%Y%m%d%H')
+    init_s = init.strftime("%m%d%H%M")
+
+    #  Loop over all forecast times, link to the source file
+    for fhr in range(0, int(fmax)+int(freq), int(freq)):
+
+       datef   = init + dt.timedelta(hours=fhr)
+       datef_s = datef.strftime("%m%d%H%M")
+
+       grib_file = "E1E{0}{1}1".format(str(init_s), str(datef_s))
+       infile    = config['model_dir'] + '/' + grib_file
+
+       #  Only try to copy if the file is not there
+       if ( not os.path.isfile(config['work_dir'] + '/' + grib_file) ):
+
+          #  Wait for the source file to be present 
+          while not os.path.exists(infile):
+             time.sleep(20.1)
+
+          #  Wait for the file to be finished being copied
+          while ( (time.time() - os.path.getmtime(infile)) < 60 ):
+             time.sleep(10)
+
+          try:  #  Try to link from the source to the work directory
+             os.symlink(infile, config['work_dir'] + '/' + grib_file)
+          except Exception as err:
+             print(err)
 
 
-    ###  Function to link each ECMWF source file to the work directory for all
-    #       forecast lead times.
-    def link_filestowork(self):
+def stage_atcf_files(datea, bbnnyyyy, config):
+    '''
+    This is a generic class for copying or linking ATCF file data from a specific location
+    to a directory where calculations are performed.  No matter where these calculations are
+    carried out, this routine must exist.
 
-        self.datea   = dt.datetime.strptime(self.init, '%Y%m%d%H')
-        self.datea_s = self.datea.strftime("%m%d%H%M")
+    The result is a set of ATCF files in the work directory of the format atcf_NN.dat, 
+    where NN is the ensemble member number.
 
-        #  Loop over all forecast times, link to the source file
-        for fhr in range(0, int(self.fmax)+int(self.freq), int(self.freq)):
+    This particular instance is for ECMWF data on the machine teton at UAlbany.  In this 
+    case, all ATCF data for a particular storm is in one file, so the code waits for this
+    initialization time to exist, then uses sed to get the lines attributed to each 
+    ensemble member and places that data in a seperate file.
 
-           datea_1 = self.datea + dt.timedelta(hours=fhr)
-           datea_1 = datea_1.strftime("%m%d%H%M")
+    Attributes:
+        datea (string):  The initialization time of the forecast (yyyymmddhh)
+        config  (dict):  The dictionary with configuration information
+    '''
+    src  = config['atcf_dir'] + "/a" + bbnnyyyy + ".dat"
+    nens = int(config['num_ens'])
 
-           grib_file = "E1E{0}{1}1".format(str(self.datea_s), str(datea_1))
-           infile    = self.src + '/' + grib_file
+    #  Wait for the source file to be present 
+    while not os.path.exists(src):
+       time.sleep(20.5)
 
-           #  Only try to copy if the file is not there
-           if ( not os.path.isfile(self.dest + '/' + grib_file) ):
+    #  Wait for the ensemble ATCF information to be placed in the file
+    while ( len(os.popen("sed -ne /" + datea + "/p " + src + " | sed -ne /EE/p").read()) == 0 ):
+       time.sleep(20.7)
 
-              #  Wait for the source file to be present 
-              while not os.path.exists(infile):
-                 time.sleep(20.1)
+    #  Wait for the file to be finished being copied
+    while ( (time.time() - os.path.getmtime(src)) < 60 ):
+       time.sleep(10)
 
-              #  Wait for the file to be finished being copied
-              while ( (time.time() - os.path.getmtime(infile)) < 60 ):
-                 time.sleep(10)
+    for n in range(nens + 1):
 
-              try:  #  Try to link from the source to the work directory
-                 os.symlink(infile, self.dest + '/' + grib_file)
-              except Exception as err:
-                 print(err)
+       nn = '%0.2i' % n
+       file_name = config['work_dir'] + "/atcf_" + nn + ".dat"
 
+       #  If the specific member's ATCF file does not exist, copy from the source file with sed.
+       if not os.path.isfile(file_name):
 
-class CopyATCFFiles:
-    def __init__(self, datea, bbnnyyyy, config):
+          fo = open(file_name,"w")
+          fo.write(os.popen("sed -ne /" + datea + "/p " + src + " | sed -ne /EE" + nn + "/p").read())
+          fo.close()
 
-        self.src = config['atcf_dir'] + "/a" + bbnnyyyy + ".dat"
-        self.dest = config['work_dir']
-        self.init = datea
-        self.nens = int(config['num_ens'])
-
-        #  Wait for the source file to be present 
-        while not os.path.exists(self.src):
-           time.sleep(20.5)
-
-        #  Wait for the ensemble ATCF information to be placed in the file
-        while ( len(os.popen("sed -ne /" + self.init + "/p " + self.src + " | sed -ne /EE/p").read()) == 0 ):
-           time.sleep(20.7)
-
-        #  Wait for the file to be finished being copied
-        while ( (time.time() - os.path.getmtime(self.src)) < 60 ):
-           time.sleep(10)
-
-        self.checkandcreatedir()
-        self.copy_filestowork()
-
-    ####  Function to copy the TC ATCF file from the source to the work directory
-    def copy_filestowork(self):
-        is_transfered = False
-
-        for n in range(self.nens + 1):
-
-           nn = '%0.2i' % n
-           file_name = self.dest + "/atcf_" + nn + ".dat"
-
-           if not self.__check_file_exists(file_name):
-
-              fo = open(file_name,"w")
-              fo.write(os.popen("sed -ne /" + self.init + "/p " + self.src + " | sed -ne /EE" + nn + "/p").read())
-              fo.close()
-
-        return is_transfered
-
-    def checkandcreatedir(self):
-        isdir = False
-        if not os.path.isdir(self.dest):
-            try:
-                os.makedirs(self.dest)
-                isdir = True
-            except OSError as e:
-                raise e
-
-        return isdir
-
-    @staticmethod
-    def __check_file_exists(filename):
-        isfile = False
-        try:
-            if os.path.isfile(filename):
-                isfile = True
-        except Exception as err:
-            print(err)
-
-        return isfile
 
 #  Class to read information from ensemble grib files
 class ReadGribFiles:

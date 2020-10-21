@@ -109,13 +109,12 @@ def main():
     print("STARTING SENSITIVITIES for {0} on {1}".format(bbnnyyyy, str(datea)))
 
     #  Copy grib and ATCF data to the work directory
-    dpp.CopyGribFiles(datea, config)
-    dpp.CopyATCFFiles(datea, bbnnyyyy, config)
+    dpp.stage_grib_files(datea, config)
+    dpp.stage_atcf_files(datea, bbnnyyyy, config)
 
     #  Read ATCF data into dictionary
     atcf = atools.ReadATCFData(config['work_dir']+"/atcf_*.dat")
     btk = atcf.get_best_data(bbnnyyyy)
-    atcf_data = atcf.atcf_files
 
     #  Plot the ensemble forecast
     config['vitals_plot']['track_output_dir'] = config['vitals_plot'].get('track_output_dir', config['work_dir'] + "/" + str(datea) + '.' + storm)
