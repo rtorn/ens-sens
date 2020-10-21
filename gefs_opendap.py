@@ -50,8 +50,9 @@ def stage_atcf_files(datea, bbnnyyyy, config):
     ensemble member and places that data in a seperate file.
 
     Attributes:
-        datea (string):  The initialization time of the forecast (yyyymmddhh)
-        config  (dict):  The dictionary with configuration information
+        datea    (string):  The initialization time of the forecast (yyyymmddhh)
+        bbnnyyyy (string):  TC Identification, where bb is the basin, nn is the number, yyyy is year
+        config     (dict):  The dictionary with configuration information
     '''
 
     src  = config['atcf_dir'] + "/a" + bbnnyyyy + ".dat.gz"
@@ -90,35 +91,106 @@ def stage_atcf_files(datea, bbnnyyyy, config):
           fo.close()
 
  
-#  Class to read information from ensemble grib files
 class ReadGribFiles:
+    '''
+    This is a generic class that is used to read specific forecast fields from a grib file at a specific
+    forecast hour.  This class is a generic class, but differs depending on the grib file format and fields.
+    The init routine creates the class and constructs a field dictionary.
+
+    This particular instance is for GEFS OpenNDAP data.  This instance reads the file that contains all 
+    ensemble members and times.  The init routine reads the grib file dictionary.
+
+    Attributes:
+        datea (string):  The initialization time of the forecast (yyyymmddhh)
+        fhr      (int):  Forecast hour
+        config  (dict):  The dictionary with configuration information
+    '''
+
     def __init__(self, datea, fhr, config):
-        self.datea_str = datea
-        self.src_path = config['model_dir']
-        self.datea = dt.datetime.strptime(datea, '%Y%m%d%H')
-        self.datea_s = self.datea.strftime("%m%d%H%M")
-        self.datef = self.datea + dt.timedelta(hours=fhr)
-        self.hhh     = '%0.3i' % fhr
-        self.fday    = int(round(fhr / 24.0))
 
-        self.ds_dict = self.__read_grib_dict()
+        self.init  = dt.datetime.strptime(datea, '%Y%m%d%H')
+        self.datef = self.init + dt.timedelta(hours=fhr)
 
+#        if ( member > 0 ):
+#            modid = 'p'
+#        else:
+#            modid = 'c'
+#        nn = '%0.2i' % member
+#        return self.src_path + '/gefs' + self.datea_str[0:8] + '/ge' + modid + nn + '_' + self.datea_str[8:10] + 'z_pgrb2a'
+        file_name = config['model_dir'] + '/gefs' + datea[0:8] + '/gefs_pgrb2ap5_all_' + datea[8:10] + 'z'
+        self.ds_dict = xr.open_dataset(file_name)
+
+        #  Put longitude into -180 to 180 format
         self.ds_dict.coords['lon'] = (self.ds_dict.coords['lon'] + 180) % 360 - 180
 
+        #  This is a variable dictionary
         self.var_dict = {'zonal_wind': 'ugrdprs', 'meridional_wind': 'vgrdprs', 'geopotential_height': 'hgtprs', 'temperature': 'tmpprs', 
                          'relative_humidity': 'rhprs', 'sea_level_pressure': 'prmslmsl'}
 
 
-    ###  Function that creates a dictionary for each ensemble gribfile
-    def __read_grib_dict(self):
+    def set_var_bounds(self, varname, vdict):
+       '''
+       This is a generic routine that is used to determine the appropriate starting and ending latitude,
+       longitude, and if appropriate pressure levels to extract from the grib files.  This routine takes into
+       account the order of the coordinate variables.  If the bounds are not specified, the routine uses all
+       coordinate indicies.  The resulting bounds are added back into the dictionary object and returned for
+       use in other routines within the class.
 
-        file_name = self.__create_file_name(0)
-        ds_dict = xr.open_dataset(file_name)
+       Attributes:
+           varname (string):  The name of the variable that will be extracted from file
+           vdict     (dict):  The dictionary object with variable information
+       '''
 
-        return ds_dict
+       vname = self.var_dict[varname]
 
-    ###  Function to read an ensemble array of fields based on input information in vdict
+       if 'latitude' in vdict:
+
+          if float(self.ds_dict[vname].lat.data[0]) > float(self.ds_dict[vname].lat.data[-1]):
+             vdict['lat_start'] = int(vdict['latitude'][1])
+             vdict['lat_end']   = int(vdict['latitude'][0])
+          else:
+             vdict['lat_start'] = int(vdict['latitude'][0])
+             vdict['lat_end']   = int(vdict['latitude'][1])
+
+       else:
+
+          latvec = list(self.ds_dict[vname].lat.data)
+          vdict['lat_start'] = latvec[0]
+          vdict['lat_end']   = latvec[-1]
+
+       if 'longitude' in vdict:
+
+          vdict['lon_start'] = int(vdict['longitude'][0])
+          vdict['lon_end']   = int(vdict['longitude'][1])
+
+       else:
+
+          lonvec = list(self.ds_dict[vname].lon.data)
+          vdict['lon_start'] = lonvec[0]
+          vdict['lon_end']   = lonvec[-1]
+
+       if 'isobaricInhPa' in vdict:
+
+          if float(self.ds_dict[vname].lev.data[0]) > float(self.ds_dict[vname].lev.data[-1]):
+            vdict['pres_start'] = int(vdict['isobaricInhPa'][1])
+            vdict['pres_end']   = int(vdict['isobaricInhPa'][0])
+          else:
+            vdict['pres_start'] = int(vdict['isobaricInhPa'][0])
+            vdict['pres_end']   = int(vdict['isobaricInhPa'][1])
+
+
     def create_ens_array(self, varname, nens, vdict):
+       '''
+       This is a generic routine that is used to create an xarray object that contains all ensemble
+       members for a particular field, with the proper units and coordinate variables.  The resulting
+       array has dimensions (ensemble, latitude, longitude).  The routine
+       takes into account the order of the lat/lon arrays
+
+       Attributes:
+           varname (string):  The name of the variable that will be extracted from file
+           nens       (int):  number of ensemble members
+           vdict     (dict):  The dictionary object with variable information
+       '''
 
        #  Determine latitude bounds.  If values are in vdict, use, otherwise, use entire array
        if 'latitude' in vdict:
@@ -157,7 +229,7 @@ class ReadGribFiles:
        if '_FillValue' in vdict:
          attrlist['_FillValue'] = vdict['_FillValue']
 
-       #  Create a dummy array that can be used to copy data into
+       #  Create an empty xarray that can be used to copy data into
        lonvec = list(self.ds_dict[self.var_dict[varname]].sel(lon=slice(lon1, lon2)).lon.data)
        latvec = list(self.ds_dict[self.var_dict[varname]].sel(lat=slice(slat1, slat2)).lat.data)
        ensarr = xr.DataArray(name='ensemble_data', data=np.zeros([nens, len(latvec), len(lonvec)]),
@@ -168,6 +240,15 @@ class ReadGribFiles:
 
     #  Function to read a single ensemble member's forecast field
     def read_grib_field(self, varname, member, vdict):
+       '''
+       This is a generic routine that is used to read a forecast field from a single ensemble member
+       based on the information contained within the dictionary vdict.
+
+       Attributes:
+           varname (string):  Name of the variable that will be extracted from file
+           member     (int):  ensemble member to read from file
+           vdict     (dict):  The dictionary object with variable information
+       '''
 
        vname = self.var_dict[varname]
 
@@ -207,28 +288,18 @@ class ReadGribFiles:
             slev1 = int(vdict['isobaricInhPa'][0])
             slev2 = int(vdict['isobaricInhPa'][1])
 
+          #  Rename the lat, lon, and pressure arrays to common convention
           vout  = self.ds_dict[vname].sel(lat=slice(slat1, slat2), lon=slice(lon1, lon2), lev=slice(slev1, slev2), ens=slice(member+1, member+1), \
                                 time=slice(self.datef, self.datef)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
-
-          atest = self.ds_dict[vname].sel(lat=slice(slat1, slat2), lon=slice(lon1, lon2), ens=slice(member+1, member+1), time=slice(self.datef, self.datef)).squeeze()
 
        #  Read the only level if it is a single level variable
        else:
 
+          #  Rename the lat and lon arrays to common convention
           vout  = self.ds_dict[vname].sel(lat=slice(slat1, slat2), lon=slice(lon1, lon2), ens=slice(member+1, member+1), \
                                 time=slice(self.datef, self.datef)).squeeze().rename({'lon': 'longitude','lat': 'latitude'})
 
        return(vout)
-
-    def __create_file_name(self,member):
-
-        if ( member > 0 ):
-            modid = 'p'
-        else:
-            modid = 'c'
-        nn = '%0.2i' % member
-#        return self.src_path + '/gefs' + self.datea_str[0:8] + '/ge' + modid + nn + '_' + self.datea_str[8:10] + 'z_pgrb2a'
-        return self.src_path + '/gefs' + self.datea_str[0:8] + '/gefs_pgrb2ap5_all_' + self.datea_str[8:10] + 'z'
 
     @staticmethod
     def __check_file_exists(filename):
