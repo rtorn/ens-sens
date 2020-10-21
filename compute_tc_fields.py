@@ -54,6 +54,22 @@ class ComputeTCFields:
         #  Obtain the ATCF and grib file information
         self.ens_lat, self.ens_lon = atcf.ens_lat_lon_time(self.fhr)
 
+        e_cnt = 0
+        m_lat = 0.0
+        m_lon = 0.0
+        for n in range(self.nens):
+            if self.ens_lat[n] != atcf.missing and self.ens_lon[n] != atcf.missing:
+                e_cnt = e_cnt + 1
+                m_lat = m_lat + self.ens_lat[n]
+                m_lon = m_lon + self.ens_lon[n]
+        m_lon = m_lon / e_cnt
+        m_lat = m_lat / e_cnt
+
+        for n in range(self.nens):
+            if self.ens_lat[n] == atcf.missing or self.ens_lon[n] == atcf.missing:
+                self.ens_lat[n] = m_lat
+                self.ens_lon[n] = m_lon
+
         g1 = self.dpp.ReadGribFiles(self.datea_str, self.fhr, self.config)
 
         dencode = {'ensemble_data': {'dtype': 'float32'}, 'latitude': {'dtype': 'float32'},

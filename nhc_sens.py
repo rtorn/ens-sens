@@ -44,7 +44,7 @@ class ComputeSensitivity:
       m_lon = 0.0
       e_cnt = 0.0
       for n in range(self.nens):
-        if elat[n] != 0.0 and elon[n] != 0.0:
+        if elat[n] != atcf.missing and elon[n] != atcf.missing:
           e_cnt = e_cnt + 1
           m_lat = m_lat + elat[n]
           m_lon = m_lon + elon[n]

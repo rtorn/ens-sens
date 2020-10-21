@@ -25,7 +25,7 @@ from math import radians, degrees, sin, cos, asin, acos, sqrt
 #####   Function to compute the great circle distance between two points
 def great_circle(lon1, lat1, lon2, lat2):
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-    return 6371. * acos(min(sin(lat1) * sin(lat2) + cos(lat1) * cos(lat2) * cos(lon1 - lon2),1.0))
+    return 6371. * acos(np.minimum(sin(lat1) * sin(lat2) + cos(lat1) * cos(lat2) * cos(lon1 - lon2),1.0))
 
 class ComputeForecastMetrics:
 
@@ -54,7 +54,7 @@ class ComputeForecastMetrics:
             print('  Computing Forecast Metrics for F' + self.fff)
 
             #  Obtain the TC latitude/longitude during, before and after time
-            self.ens_lat, self.ens_lon   = self.atcf.ens_lat_lon_time(self.fhr)
+            self.ens_lat,  self.ens_lon  = self.atcf.ens_lat_lon_time(self.fhr)
             self.ens_lat1, self.ens_lon1 = self.atcf.ens_lat_lon_time(self.fhr - 6)
             self.ens_lat2, self.ens_lon2 = self.atcf.ens_lat_lon_time(self.fhr + 6)
 
@@ -166,7 +166,7 @@ class ComputeForecastMetrics:
 
         #  Compute the ensemble-mean if lat/lon pair is not missing
         for n in range(self.nens):
-            if self.ens_lat[n] != 0.0 and self.ens_lon[n] != 0.0:
+            if self.ens_lat[n] != self.atcf.missing and self.ens_lon[n] != self.atcf.missing:
                 e_cnt = e_cnt + 1
                 m_lat = m_lat + self.ens_lat[n]
                 m_lon = m_lon + self.ens_lon[n]
@@ -175,7 +175,7 @@ class ComputeForecastMetrics:
 
         #  Compute the distance in zonal and meridonal direction from mean
         for n in range(self.nens):
-            if self.ens_lat[n] != 0.0 and self.ens_lon[n] != 0.0:
+            if self.ens_lat[n] != self.atcf.missing and self.ens_lon[n] != self.atcf.missing:
                 fx_dir[n] = (self.ens_lon[n] - m_lon) * \
                             self.deg2km * math.cos(math.radians(0.5 * (self.ens_lat[n] + m_lat)))
                 fy_dir[n] = (self.ens_lat[n] - m_lat) * self.deg2km
@@ -189,7 +189,7 @@ class ComputeForecastMetrics:
         x_mean = x_mean / e_cnt
         y_mean = y_mean / e_cnt
         for n in range(self.nens):
-            if self.ens_lat[n] != 0.0 and self.ens_lon[n] != 0.0:
+            if self.ens_lat[n] != self.atcf.missing and self.ens_lon[n] != self.atcf.missing:
                 x_var = x_var + (fx_dir[n] - x_mean) ** 2
                 y_var = y_var + (fy_dir[n] - y_mean) ** 2
                 xy_cov = xy_cov + (fx_dir[n] - x_mean) * (fy_dir[n] - y_mean)
@@ -259,7 +259,7 @@ class ComputeForecastMetrics:
 
         #  Compute the ensemble-mean position at center time
         for n in range(self.nens):
-            if self.ens_lat[n] != 0.0 and self.ens_lon[n] != 0.0:
+            if self.ens_lat[n] != self.atcf.missing and self.ens_lon[n] != self.atcf.missing:
                 e_cnt = e_cnt + 1
                 m_lat = m_lat + self.ens_lat[n]
                 m_lon = m_lon + self.ens_lon[n]
@@ -273,7 +273,7 @@ class ComputeForecastMetrics:
 
         #  Compute mean lat/lon at time before
         for n in range(self.nens):
-            if self.ens_lat1[n] != 0.0 and self.ens_lon1[n] != 0.0:
+            if self.ens_lat1[n] != self.atcf.missing and self.ens_lon1[n] != self.atcf.missing:
                 e_cnt = + 1
                 m_lat1 = + self.ens_lat1[n]
                 m_lon1 = + self.ens_lon1[n]
@@ -290,7 +290,7 @@ class ComputeForecastMetrics:
 
         #  Compute mean lat/lon at time after
         for n in range(self.nens):
-            if self.ens_lat2[n] != 0.0 and self.ens_lon2[n] != 0.0:
+            if self.ens_lat2[n] != self.atcf.missing and self.ens_lon2[n] != self.atcf.missing:
                 e_cnt = e_cnt + 1
                 m_lat2 = m_lat2 + self.ens_lat2[n]
                 m_lon2 = m_lon2 + self.ens_lon2[n]
@@ -316,7 +316,7 @@ class ComputeForecastMetrics:
 
         #  Compute the distance in the along/across directions
         for n in range(self.nens):
-            if self.ens_lat[n] != 0.0 and self.ens_lon[n] != 0.0:
+            if self.ens_lat[n] != self.atcf.missing and self.ens_lon[n] != self.atcf.missing:
                 x_dir = (self.ens_lon[n] - m_lon) \
                         * self.deg2km * math.cos(0.5 * (self.ens_lat[n] + m_lat) * self.deg2rad)
                 y_dir = (self.ens_lat[n] - m_lat) * self.deg2km
@@ -374,7 +374,7 @@ class ComputeForecastMetrics:
         m_lat = 0.0
         m_lon = 0.0
         for n in range(self.nens):
-           if lat_vec[n] != 0.0 and lon_vec[n] != 0.0:
+           if lat_vec[n] != self.atcf.missing and lon_vec[n] != self.atcf.missing:
               e_cnt = e_cnt + 1
               m_lat = m_lat + lat_vec[n]
               m_lon = m_lon + lon_vec[n]
@@ -383,7 +383,7 @@ class ComputeForecastMetrics:
         m_lat = m_lat / e_cnt
 
         for n in range(self.nens):
-           if lat_vec[n] == 0.0 and lon_vec[n] == 0.0:
+           if lat_vec[n] == self.atcf.missing or lon_vec[n] == self.atcf.missing:
               lat_vec[n] = m_lat
               lon_vec[n] = m_lon
 
@@ -440,6 +440,8 @@ class ComputeForecastMetrics:
 
               nlat = len(ul.latitude.values)
               nlon = len(ul.longitude.values)
+
+              lonarr, latarr = np.meshgrid(ul.longitude.values, ul.latitude.values)
 
               #  Compute the average KE within the specified radius
               aresum = 0.0
@@ -508,7 +510,7 @@ class ComputeForecastMetrics:
            m_lat_t = 0.0
            m_lon_t = 0.0
            for n in range(self.nens):
-              if lat[n] != 0.0 and lon[n] != 0.0:
+              if lat[n] != self.atcf.missing and lon[n] != self.atcf.missing:
                 e_cnt = e_cnt + 1
                 m_lat_t = m_lat_t + lat[n]
                 m_lon_t = m_lon_t + lon[n]
@@ -523,7 +525,7 @@ class ComputeForecastMetrics:
               p1 = p1 + 2
               p2 = p1 + 1
               for n in range(self.nens):
-                 if lat[n] != 0.0 and lon[n] != 0.0:
+                 if lat[n] != self.atcf.missing and lon[n] != self.atcf.missing:
                     ensvec[n,p1] = (lat[n]-m_lat_t)*self.deg2rad*self.earth_radius
                     ensvec[n,p2] = (lon[n]-m_lon_t)*self.deg2rad*self.earth_radius*math.cos(math.radians(m_lat_t))
                  else:
@@ -555,7 +557,7 @@ class ComputeForecastMetrics:
 
            e_cnt = 0
            for n in range(self.nens):
-              if ens_lat[n,t] != 0.0 and ens_lon[n,t] != 0.0:
+              if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
                 e_cnt = e_cnt + 1
                 m_lat[t] = m_lat[t] + ens_lat[n,t]
                 m_lon[t] = m_lon[t] + ens_lon[n,t]
@@ -564,7 +566,7 @@ class ComputeForecastMetrics:
            m_lat[t] = m_lat[t] / e_cnt
 
            for n in range(self.nens):
-              if ens_lat[n,t] != 0.0 and ens_lon[n,t] != 0.0:
+              if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
                  dy[t] = dy[t] + (ens_lat[n,t]-m_lat[t])*self.deg2rad*self.earth_radius * pc1[n]
                  dx[t] = dx[t] + (ens_lon[n,t]-m_lon[t])*self.deg2rad*self.earth_radius*math.cos(math.radians(m_lat[t])) * pc1[n]
  
@@ -665,7 +667,7 @@ class ComputeForecastMetrics:
         #  Determine range of figure
         for n in range(self.nens):
           for t in range(ntimes):
-            if ens_lat[n,t] != 0. or ens_lon[n,t] != 0.:
+            if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
               minLat = min([minLat, ens_lat[n,t]])
               maxLat = max([maxLat, ens_lat[n,t]])
               minLon = min([minLon, ens_lon[n,t]])
@@ -699,7 +701,7 @@ class ComputeForecastMetrics:
           x = []
           y = []
           for t in range(ntimes):
-            if ens_lat[n,t] != 0. or ens_lon[n,t] != 0.:
+            if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
               y.append(ens_lat[n,t])
               x.append(ens_lon[n,t])
             ax.plot(x, y, color='lightgray', zorder=1, transform=ccrs.Geodetic())
@@ -718,7 +720,7 @@ class ComputeForecastMetrics:
             y_ens = []
             e_cnt = 0
             for n in range(self.nens):
-              if ens_lat[n,t] != 0. or ens_lon[n,t] != 0.:
+              if ens_lat[n,t] != self.atcf.missing or ens_lon[n,t] != self.atcf.missing:
                 e_cnt = e_cnt + 1
                 y_ens.append(ens_lat[n,t])
                 x_ens.append(ens_lon[n,t])
@@ -810,7 +812,7 @@ class ComputeForecastMetrics:
            e_cnt   = 0
            m_slp_t = 0.0
            for n in range(self.nens):
-              if slp[n] != 0.0:
+              if slp[n] != self.atcf.missing:
                 e_cnt = e_cnt + 1
                 m_slp_t = m_slp_t + slp[n]
 
@@ -821,7 +823,7 @@ class ComputeForecastMetrics:
               tt      = tt + 1
 
               for n in range(self.nens):
-                 if slp[n] != 0.0:
+                 if slp[n] != self.atcf.missing:
                     ensvec[n,tt] = slp[n]-m_slp_t
                  else:
                     ensvec[n,tt] = 0.0
@@ -853,7 +855,7 @@ class ComputeForecastMetrics:
 
            e_cnt = 0
            for n in range(self.nens):
-              if ens_slp[n,t] != 0.0:
+              if ens_slp[n,t] != self.atcf.missing:
                 e_cnt = e_cnt + 1
                 m_slp[t] = m_slp[t] + ens_slp[n,t]
                 m_wnd[t] = m_wnd[t] + ens_wnd[n,t]
@@ -868,7 +870,7 @@ class ComputeForecastMetrics:
 
            #  Compute the MSLP trace associated with a 1 PC perturbation
            for n in range(self.nens):
-              if ens_slp[n,t] != 0.0:
+              if ens_slp[n,t] != self.atcf.missing:
                  dslp[t] = dslp[t] + (ens_slp[n,t]-m_slp[t]) * pc1[n]
                  dwnd[t] = dwnd[t] + (ens_wnd[n,t]-m_wnd[t]) * pc1[n]
 
@@ -897,7 +899,7 @@ class ComputeForecastMetrics:
           sens_x = []
           sens_y = []
           for t in range(ntimes):
-            if ens_slp[n,t] != 0.0:
+            if ens_slp[n,t] != self.atcf.missing:
               sens_x.append(f1+t*6)
               sens_y.append(ens_slp[n,t])
               minval = min([minval, ens_slp[n,t]])
@@ -920,7 +922,7 @@ class ComputeForecastMetrics:
           sens_x = []
           sens_y = []
           for t in range(ntimes):
-            if ens_wnd[n,t] != 0.0:
+            if ens_wnd[n,t] != self.atcf.missing:
               sens_x.append(f1+t*6)
               sens_y.append(ens_wnd[n,t])
               minval = min([minval, ens_wnd[n,t]])
