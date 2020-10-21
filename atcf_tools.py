@@ -15,6 +15,7 @@ class ReadATCFData:
         self.atcf_files = {}
         self.atcf_array = {}
         self.no_atcf_files = 0
+        self.missing = -9999.
 #        atcf_data = glob.glob(self.src_path+"/atcf_*.dat")
         atcf_data = glob.glob(infiles)
         atcf_data = sorted(atcf_data)
@@ -123,8 +124,10 @@ class ReadATCFData:
             self.atcf_array.get(f).update({'max_wind_speed': wndvec})
 
     def ens_lat_lon_time(self, fhr):
-        ens_lat = list(np.zeros(len(self.atcf_files)))
-        ens_lon = list(np.zeros(len(self.atcf_files)))
+#        ens_lat = list(np.zeros(len(self.atcf_files)))
+#        ens_lon = list(np.zeros(len(self.atcf_files)))
+        ens_lat = list(np.ones(len(self.atcf_files)) * self.missing)
+        ens_lon = list(np.ones(len(self.atcf_files)) * self.missing)
         for n in range(len(self.atcf_files)):
            x = "df_{0}".format(str((n + 1000))[1:])
            if fhr in list(self.atcf_array.get(n)['forecast_hour']):
@@ -135,8 +138,10 @@ class ReadATCFData:
         return ens_lat, ens_lon
 
     def ens_intensity_time(self, fhr):
-        ens_slp = list(np.zeros(len(self.atcf_files)))
-        ens_wnd = list(np.zeros(len(self.atcf_files)))
+#        ens_slp = list(np.zeros(len(self.atcf_files)))
+#        ens_wnd = list(np.zeros(len(self.atcf_files)))
+        ens_slp = list(np.ones(len(self.atcf_files)) * self.missing)
+        ens_wnd = list(np.ones(len(self.atcf_files)) * self.missing)
         for n in range(len(self.atcf_files)):
            if fhr in list(self.atcf_array.get(n)['forecast_hour']):
               i = list(self.atcf_array.get(n)['forecast_hour']).index(fhr)

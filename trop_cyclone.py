@@ -13,18 +13,19 @@ import math
 import atcf_tools as atools
 import track as tr
 
-
-def plot_ens_tc_track(fvital, bvital, storm, datea, config):
+def plot_ens_tc_track(atcf, bvital, storm, datea, config):
     
     output_dir = config.get('track_output_dir', '.')
+    fhrint  = float(config.get('fhrint',6))
+    fhrmax  = float(config.get('forecast_hour_max',120))
+
+    ntimes = int(fhrmax / fhrint) + 1
+    nens   = len(atcf.atcf_files)  # total ensembles
 
     plot_ellipse = config.get('plot_ellipse', 'True')
     subcolors = ["Blue", "DarkOrange"]
     ellcol = ["#551A8B", "#00FFFF", "#00EE00", "#FF0000", "#FF00FF", "#551A8B", "#00FFFF", "#00EE00", "#FF0000"]
     plot_best = True
-    dim1 = fvital.dim
-    nens = int(dim1[0])
-    ntimes = int(dim1[1])
 
     #  Create basic map figure
     fig = plt.figure(figsize=(11,8.5))
@@ -43,14 +44,23 @@ def plot_ens_tc_track(fvital, bvital, storm, datea, config):
     minLon = 360.
     maxLon = -180.
 
+    all_lat  = np.ones([nens, ntimes]) * atcf.missing
+    all_lon  = np.ones([nens, ntimes]) * atcf.missing
+    fhrvec = np.empty(ntimes) 
+
+    for t in range(ntimes):
+       fhr = fhrint * t
+       all_lat[:,t], all_lon[:,t] = atcf.ens_lat_lon_time(fhr)
+       fhrvec[t] = fhr
+
     #  Figure out the min/max latitude and longitude values
     for n in range(nens):
-      for key in range(ntimes):
-        if float(fvital.get_value([n, key, 0])) != 0.0 and float(fvital.get_value([n, key, 1])) != 0.0:
-          minLat = min([minLat, fvital.get_value([n, key, 0])])
-          maxLat = max([maxLat, fvital.get_value([n, key, 0])])
-          minLon = min([minLon, fvital.get_value([n, key, 1])])
-          maxLon = max([maxLon, fvital.get_value([n, key, 1])]) 
+      for t in range(ntimes):
+        if all_lat[n,t] != atcf.missing and all_lon[n,t] != atcf.missing:
+          minLat = min([minLat, all_lat[n,t]])
+          maxLat = max([maxLat, all_lat[n,t]])
+          minLon = min([minLon, all_lon[n,t]])
+          maxLon = max([maxLon, all_lon[n,t]]) 
 
     minLat = minLat - 2.5
     maxLat = maxLat + 2.5
@@ -76,10 +86,10 @@ def plot_ens_tc_track(fvital, bvital, storm, datea, config):
     for n in range(nens):
         x = []
         y = []
-        for key in range(ntimes):
-            if float(fvital.get_value([n, key, 0])) != 0.0 and float(fvital.get_value([n, key, 1])) != 0.0:
-                y.append(fvital.get_value([n, key, 0]))
-                x.append(fvital.get_value([n, key, 1]))
+        for t in range(ntimes):
+            if all_lat[n,t] != atcf.missing and all_lon[n,t] != atcf.missing:
+                y.append(all_lat[n,t])
+                x.append(all_lon[n,t])
         ax.plot(x, y, color='gray', zorder=1, transform=ccrs.Geodetic())
     t = 1
     bstart = 0
@@ -121,20 +131,19 @@ def plot_ens_tc_track(fvital, bvital, storm, datea, config):
        ell_freq = float(config.get('ellipse_frequency', 24))
        pb = np.empty([2,2])
 
-       for key in range(ntimes):
-          if ((fvital.get_value([0, key, 5]) % ell_freq) == 0) and (fvital.get_value([0, key, 5]) > 0):
+       for t in range(ntimes):
+          if (fhrvec[t] % ell_freq) == 0 and fhrvec[t] > 0:
 
              #  Compute the ensemble-mean lat/lon for the members that have position, plot members
              m_lat = 0.0
              m_lon = 0.0
              pcnt  = 0
              for n in range(nens):
-                 if float(fvital.get_value([n, key, 0])) != 0.0 and \
-                    float(fvital.get_value([n, key, 1])) != 0.0:
-                     e_lat[pcnt] = float(fvital.get_value([n, key, 0]))
-                     e_lon[pcnt] = float(fvital.get_value([n, key, 1]))
-                     m_lat = m_lat + float(fvital.get_value([n, key, 0]))
-                     m_lon = m_lon + float(fvital.get_value([n, key, 1]))
+                 if all_lat[n,t] != atcf.missing and all_lon[n,t] != atcf.missing:
+                     e_lat[pcnt] = all_lat[n,t]
+                     e_lon[pcnt] = all_lon[n,t]
+                     m_lat = m_lat + all_lat[n,t]
+                     m_lon = m_lon + all_lon[n,t]
                      pcnt = pcnt + 1
              if pcnt > 0:
                 ax.scatter(e_lon[0:(pcnt-1)], e_lat[0:(pcnt-1)], s=4, marker='o', color=ellcol[color_index], zorder=12)
@@ -186,15 +195,16 @@ def plot_ens_tc_track(fvital, bvital, storm, datea, config):
     plt.close()
 
 
-def plot_ens_tc_intensity(fvital, b_vital, storm, datea, config):
+def plot_ens_tc_intensity(atcf, b_vital, storm, datea, config):
 
     output_dir = config.get('int_output_dir', '.')
+    fhrint  = float(config.get('fhrint',6))
+    fhrmax  = float(config.get('forecast_hour_max',120))
 
+    ntimes = int(fhrmax / fhrint) + 1
+    nens   = len(atcf.atcf_files)  # total ensembles
 
-    dim_fvital = fvital.dim
     dim_bvital = b_vital.dim
-    nens = dim_fvital[0]
-    ntime = dim_fvital[1]
 #    nsub = subens[0]
 
 #    tmax = ntime - 1
@@ -209,6 +219,15 @@ def plot_ens_tc_intensity(fvital, b_vital, storm, datea, config):
 #    subslp.create_dimension(copy.copy([nsub, nens, ntime]))
 #    subwnd = tr.Track([nsub, nens, ntime])
 #    subwnd.create_dimension(copy.copy([nsub, nens, ntime]))
+
+    all_slp  = np.ones([nens, ntimes]) * atcf.missing
+    all_wnd  = np.ones([nens, ntimes]) * atcf.missing
+    fhrvec = np.empty(ntimes)
+
+    for t in range(ntimes):
+       fhr = fhrint * t
+       all_slp[:,t], all_wnd[:,t] = atcf.ens_intensity_time(fhr)
+       fhrvec[t] = fhr
 
     fig = plt.figure(figsize=(6, 10))
     grid = plt.GridSpec(2, 2, hspace=0.2, wspace=0.2)
@@ -232,12 +251,12 @@ def plot_ens_tc_intensity(fvital, b_vital, storm, datea, config):
     for n in range(nens):
        sens_x = []
        sens_y = []
-       for t in range(ntime):
-          if fvital.get_value([n, t, 2]) != 0.0:
-             sens_x.append(fvital.get_value([n, t, 5]))
-             sens_y.append(fvital.get_value([n, t, 2]))
-             minval = min([minval, fvital.get_value([n, t, 2])])
-             maxval = max([maxval, fvital.get_value([n, t, 2])])
+       for t in range(ntimes):
+          if all_slp[n,t] != atcf.missing:
+             sens_x.append(fhrvec[t])
+             sens_y.append(all_slp[n,t])
+             minval = min([minval, all_slp[n,t]])
+             maxval = max([maxval, all_slp[n,t]])
        ax0.plot(sens_x, sens_y, color='gray')
 #    for s in range(nsub):
 #        mean_slp = []
@@ -255,23 +274,22 @@ def plot_ens_tc_intensity(fvital, b_vital, storm, datea, config):
         b_x_pres.append(b_vital.get_value([i, 4]))
         b_y_pres.append(b_vital.get_value([i, 2]))
     ax0.plot(b_x_pres, b_y_pres, color='black')
-    plt.xlim(0, 144)
     ax0.set_xlabel("Forecast Hour")
     ax0.set_ylabel("Minimum Pressure (hPa)")
     plt.title("{0} ECMWF forecast of {1}".format(str(datea), storm))
     plt.xticks(range(0,240,24))
-    plt.xlim(0, 144)
+    plt.xlim(0, fhrmax)
 
     ax1 = fig.add_subplot(grid[1, 0:])
     for n in range(nens):
        sens_x1 = []
        sens_y1 = []
-       for t in range(ntime):
-          if fvital.get_value([n, t, 3]) != 0.0:
-             sens_x1.append(fvital.get_value([n, t, 5]))
-             sens_y1.append(fvital.get_value([n, t, 3]))
-             minval = min([minval, fvital.get_value([n, t, 3])])
-             maxval = max([maxval, fvital.get_value([n, t, 3])])
+       for t in range(ntimes):
+          if all_wnd[n,t] != atcf.missing:
+             sens_x1.append(fhrvec[t])
+             sens_y1.append(all_wnd[n,t])
+             minval = min([minval, all_wnd[n,t]])
+             maxval = max([maxval, all_wnd[n,t]])
        ax1.plot(sens_x1, sens_y1, color='gray')
     b_x_wind = []
     b_y_wind = []
@@ -282,7 +300,7 @@ def plot_ens_tc_intensity(fvital, b_vital, storm, datea, config):
     ax1.set_xlabel("Forecast Hour")
     ax1.set_ylabel("Maximum Wind Speed (knots)")
     plt.xticks(range(0,240,24))
-    plt.xlim(0, 144)    
+    plt.xlim(0, fhrmax)    
 
     try:
         os.makedirs(output_dir)
@@ -358,9 +376,6 @@ def atcf_ens_tc_vitals(atcf, best_file, datea, storm, fstid, bestmax, config, ou
     else:
         RuntimeError("File Not Found")
 
-    dim = [nens, maxfhr, 6]
-    fvital = tr.Track(dim)
-    fvital.create_dimension(copy.copy(dim))
 #    f34wrad = {}
 #    for i in range(nens):
 #        f34wrad.update({i: {}})
@@ -374,22 +389,6 @@ def atcf_ens_tc_vitals(atcf, best_file, datea, storm, fstid, bestmax, config, ou
 #            f34wrad.get(key).get(t)[0] = fhr
 #        fhr = fhr + float(fhrint)
 
-
-    #  Obtain the ensemble forecast data from the ATCF object
-    for t in range(int(maxfhr)):
-       fhr = fhrint * t
-       gdate_f = float(gdatea.day + (fhr / 24.0))
-       elat, elon = atcf.ens_lat_lon_time(fhr)
-       eslp, ewnd = atcf.ens_intensity_time(fhr)
-
-       for n in range(nens):
-          fvital.set_value([n, t, 0], elat[n])
-          fvital.set_value([n, t, 1], elon[n]) 
-          fvital.set_value([n, t, 2], eslp[n])
-          fvital.set_value([n, t, 3], ewnd[n])
-          fvital.set_value([n, t, 4], gdate_f)
-          fvital.set_value([n, t, 5], fhr)
-
-    plot_ens_tc_track(fvital, bvital, storm, datea, config)
-    plot_ens_tc_intensity(fvital, bvital, storm, datea, config)
+    plot_ens_tc_track(atcf, bvital, storm, datea, config)
+    plot_ens_tc_intensity(atcf, bvital, storm, datea, config)
 
