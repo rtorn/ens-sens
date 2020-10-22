@@ -148,9 +148,13 @@ class ReadGribFiles:
         else:
            exit(2)
 
-        #  This is a variable dictionary 
-        self.var_dict = {'zonal_wind': 'u', 'meridional_wind': 'v', 'geopotential_height': 'gh', 'temperature': 't', 
-                         'relative_humidity': 'r', 'sea_level_pressure': 'msl'}
+        #  This is a dictionary that maps from generic variable names to the name of variable in file
+        self.var_dict = {'zonal_wind': 'u',           \
+                         'meridional_wind': 'v',      \
+                         'geopotential_height': 'gh', \
+                         'temperature': 't',          \
+                         'relative_humidity': 'r',    \
+                         'sea_level_pressure': 'msl'}
 
 
     def set_var_bounds(self, varname, vdict):
@@ -227,34 +231,6 @@ class ReadGribFiles:
 
        vname = self.var_dict[varname] + '_cf'
 
-       #  Determine latitude bounds.  If values are in vdict, use, otherwise, use entire array
-       if 'latitude' in vdict:
-
-          if float(self.grib_dict[vname].attrs['GRIB_latitudeOfFirstGridPointInDegrees']) > float(self.grib_dict[vname].attrs['GRIB_latitudeOfLastGridPointInDegrees']):
-             slat1 = int(vdict['latitude'][1])
-             slat2 = int(vdict['latitude'][0])
-          else:
-             slat1 = int(vdict['latitude'][0])
-             slat2 = int(vdict['latitude'][1])
-
-       else:
-
-          latvec = list(self.grib_dict[vname].latitude.data)
-          slat1  = latvec[0]
-          slat2  = latvec[-1]
-
-       #  Determine longitude bounds.  If values are in vdict, use, otherwise, use entire array
-       if 'longitude' in vdict:
-
-          lon1 = int(vdict['longitude'][0])
-          lon2 = int(vdict['longitude'][1])
-
-       else:
-
-          lonvec = list(self.grib_dict[vname].longitude.data)
-          lon1   = lonvec[0]
-          lon2   = lonvec[-1]
-
        #  Create attributes based on what is in the file
        attrlist = {}
        if 'description' in vdict:
@@ -265,13 +241,14 @@ class ReadGribFiles:
          attrlist['_FillValue'] = vdict['_FillValue']
 
        #  Create an empty xarray that can be used to copy data into
-       lonvec = list(self.grib_dict[vname].sel(longitude=slice(lon1, lon2)).longitude.data)
-       latvec = list(self.grib_dict[vname].sel(latitude=slice(slat1, slat2)).latitude.data)
+       lonvec = list(self.grib_dict[vname].sel(longitude=slice(vdict['lon_start'], vdict['lon_end'])).longitude.data)
+       latvec = list(self.grib_dict[vname].sel(latitude=slice(vdict['lat_start'], vdict['lat_end'])).latitude.data)
        ensarr = xr.DataArray(name='ensemble_data', data=np.zeros([nens, len(latvec), len(lonvec)]),
                              dims=['ensemble', 'latitude', 'longitude'], attrs=attrlist, 
                              coords={'ensemble': [i for i in range(nens)], 'latitude': latvec, 'longitude': lonvec}) 
 
        return(ensarr)
+
 
     #  Function to read a single ensemble member's forecast field
     def read_grib_field(self, varname, member, vdict):
@@ -285,65 +262,36 @@ class ReadGribFiles:
            vdict     (dict):  The dictionary object with variable information
        '''
 
-       vname = self.var_dict[varname] + '_cf'
-
-       if 'latitude' in vdict:
-
-          if float(self.grib_dict[vname].attrs['GRIB_latitudeOfFirstGridPointInDegrees']) > float(self.grib_dict[vname].attrs['GRIB_latitudeOfLastGridPointInDegrees']):
-             slat1 = int(vdict['latitude'][1])
-             slat2 = int(vdict['latitude'][0])
-          else:
-             slat1 = int(vdict['latitude'][0])
-             slat2 = int(vdict['latitude'][1])
-
-       else:
-
-          latvec = list(self.grib_dict[vname].latitude.data)
-          slat1  = latvec[0]
-          slat2  = latvec[-1]
-
-       if 'longitude' in vdict:
-
-          lon1 = int(vdict['longitude'][0])
-          lon2 = int(vdict['longitude'][1])
-
-       else:
-
-          lonvec = list(self.grib_dict[vname].longitude.data)
-          lon1   = lonvec[0]
-          lon2   = lonvec[-1]
-
        #  Read a single pressure level of data, if this is a variable that has pressure levels
        if 'isobaricInhPa' in vdict:
 
-          if self.grib_dict[vname].isobaricInhPa[0] > self.grib_dict[vname].isobaricInhPa[1]:
-            slev1 = int(vdict['isobaricInhPa'][1])
-            slev2 = int(vdict['isobaricInhPa'][0])
-          else:
-            slev1 = int(vdict['isobaricInhPa'][0])
-            slev2 = int(vdict['isobaricInhPa'][1])
- 
-
           if member == 0:  #  Control member
              vname = self.var_dict[varname] + '_cf'
-             vout  = self.grib_dict[vname].sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2), isobaricInhPa=slice(slev1, slev2))
+             vout  = self.grib_dict[vname].sel(latitude=slice(vdict['lat_start'], vdict['lat_end']),  \
+                                               longitude=slice(vdict['lon_start'], vdict['lon_end']), \
+                                               isobaricInhPa=slice(vdict['pres_start'], vdict['pres_end']))
 
           else:
              vname = self.var_dict[varname] + '_pf'
-             vout  = self.grib_dict[vname].sel(number=member, latitude=slice(slat1, slat2), longitude=slice(lon1, lon2), 
-                                                isobaricInhPa=slice(slev1, slev2))
+             vout  = self.grib_dict[vname].sel(number=member,                                         \
+                                               latitude=slice(vdict['lat_start'], vdict['lat_end']),  \
+                                               longitude=slice(vdict['lon_start'], vdict['lon_end']), \
+                                               isobaricInhPa=slice(vdict['pres_start'], vdict['pres_end']))
 
        #  Read the only level if it is a single level variable
        else:
 
           if member == 0:  #  Control member
              vname = self.var_dict[varname] + '_cf'
-             vout  = (self.grib_dict[vname].sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2)))
+             vout  = self.grib_dict[vname].sel(latitude=slice(vdict['lat_start'], vdict['lat_end']), \
+                                               longitude=slice(vdict['lon_start'], vdict['lon_end']))
 
           else:
 
              vname = self.var_dict[varname] + '_pf'
-             vout  = (self.grib_dict[vname].sel(number=member, latitude=slice(slat1, slat2), longitude=slice(lon1, lon2)))
+             vout  = self.grib_dict[vname].sel(number=member,                                        \
+                                               latitude=slice(vdict['lat_start'], vdict['lat_end']), \
+                                               longitude=slice(vdict['lon_start'], vdict['lon_end']))
 
        return(vout)
 

@@ -51,7 +51,7 @@ class ComputeTCFields:
 
         print("Computing hour " + self.fff + " ensemble fields")
 
-        #  Obtain the ATCF and grib file information
+        #  Obtain the ensemble lat/lon information, replace missing values with mean
         self.ens_lat, self.ens_lon = atcf.ens_lat_lon_time(self.fhr)
 
         e_cnt = 0
@@ -82,19 +82,23 @@ class ComputeTCFields:
           print("  Computing steering wind information")
 
           inpDict = {'isobaricInhPa': (steerp1, steerp2)}
+          inpDict = g1.set_var_bounds('zonal_wind', inpDict)
 
           #  Create output arrays
           outDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 
                      'description': 'zonal steering wind', 'units': 'm/s', '_FillValue': -9999.}
-          uensmat = g1.create_ens_array('zonal_wind', len(self.atcf_files), outDict)          
+          outDict = g1.set_var_bounds('zonal_wind', outDict)
+          uensmat = g1.create_ens_array('zonal_wind', self.nens, outDict)          
 
           outDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2),
                      'description': 'meridional steering wind', 'units': 'm/s', '_FillValue': -9999.}
-          vensmat = g1.create_ens_array('meridional_wind', len(self.atcf_files), outDict)       
+          outDict = g1.set_var_bounds('meridional_wind', outDict)
+          vensmat = g1.create_ens_array('meridional_wind', self.nens, outDict)       
 
           outDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2),
                      'description': 'steering wind vorticity', 'units': '1/s', '_FillValue': -9999.}
-          vortmat = g1.create_ens_array('zonal_wind', len(self.atcf_files), outDict)
+          outDict = g1.set_var_bounds('zonal_wind', outDict)
+          vortmat = g1.create_ens_array('zonal_wind', self.nens, outDict)
 
           wencode = {'latitude': {'dtype': 'float32'}, 'longitude': {'dtype': 'float32'}}
 
@@ -164,11 +168,11 @@ class ComputeTCFields:
 
           vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (500, 500), 
                    'description': '500 hPa height', 'units': 'm', '_FillValue': -9999.}
-
-          ensmat = g1.create_ens_array('geopotential_height', len(self.atcf_files), vDict)
+          vDict = g1.set_var_bounds('geopotential_height', vDict)
+          ensmat = g1.create_ens_array('geopotential_height', self.nens, vDict)
 
           for n in range(self.nens):
-            ensmat[n,:,:] = np.squeeze(g1.read_grib_field('geopotential_height', n, vDict))
+             ensmat[n,:,:] = np.squeeze(g1.read_grib_field('geopotential_height', n, vDict))
 
           ensmat.to_netcdf(outfile, encoding=dencode)
 
@@ -184,8 +188,9 @@ class ComputeTCFields:
 
           vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (200, 300),
                    'description': '250 hPa Potential Vorticity', 'units': 'PVU', '_FillValue': -9999.}
+          vDict = g1.set_var_bounds('zonal_wind', vDict)
 
-          ensmat = g1.create_ens_array('zonal_wind', len(self.atcf_files), vDict)
+          ensmat = g1.create_ens_array('zonal_wind', self.nens, vDict)
 
           for n in range(self.nens):
 
@@ -224,6 +229,7 @@ class ComputeTCFields:
 
           vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (700, 700),
                    'description': '700 hPa Equivalent Potential Temperature', 'units': 'K', '_FillValue': -9999.}
+          vDict = g1.set_var_bounds('temperature', vDict)
 
           ensmat = g1.create_ens_array('temperature', len(self.atcf_files), vDict)
 
@@ -254,11 +260,13 @@ class ComputeTCFields:
 
           vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2),
                    'description': '500-850 hPa Integrated Water Vapor', 'units': 'hPa', '_FillValue': -9999.}
+          vDict = g1.set_var_bounds('temperature', vDict)
 
           ensmat = g1.create_ens_array('temperature', len(self.atcf_files), vDict)
 
           vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (500, 850),
                    'description': '500-850 hPa Integrated Water Vapor', 'units': 'hPa', '_FillValue': -9999.}
+          vDict = g1.set_var_bounds('temperature', vDict)
 
           for n in range(self.nens):
 

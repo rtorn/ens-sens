@@ -1,14 +1,9 @@
 import os
 import time
-import shutil
 import gzip
 import sys
-import netCDF4 as nc
 import urllib
-import cfgrib
 import datetime as dt
-import glob
-import pandas as pd
 import numpy as np
 import xarray as xr
 
@@ -123,9 +118,13 @@ class ReadGribFiles:
         #  Put longitude into -180 to 180 format
         self.ds_dict.coords['lon'] = (self.ds_dict.coords['lon'] + 180) % 360 - 180
 
-        #  This is a variable dictionary
-        self.var_dict = {'zonal_wind': 'ugrdprs', 'meridional_wind': 'vgrdprs', 'geopotential_height': 'hgtprs', 'temperature': 'tmpprs', 
-                         'relative_humidity': 'rhprs', 'sea_level_pressure': 'prmslmsl'}
+        #  This is a dictionary that maps from generic variable names to the name of variable in file
+        self.var_dict = {'zonal_wind': 'ugrdprs',         \
+                         'meridional_wind': 'vgrdprs',    \
+                         'geopotential_height': 'hgtprs', \
+                         'temperature': 'tmpprs',         \
+                         'relative_humidity': 'rhprs',    \
+                         'sea_level_pressure': 'prmslmsl'}
 
 
     def set_var_bounds(self, varname, vdict):
@@ -178,6 +177,8 @@ class ReadGribFiles:
             vdict['pres_start'] = int(vdict['isobaricInhPa'][0])
             vdict['pres_end']   = int(vdict['isobaricInhPa'][1])
 
+       return vdict
+
 
     def create_ens_array(self, varname, nens, vdict):
        '''
@@ -192,34 +193,6 @@ class ReadGribFiles:
            vdict     (dict):  The dictionary object with variable information
        '''
 
-       #  Determine latitude bounds.  If values are in vdict, use, otherwise, use entire array
-       if 'latitude' in vdict:
-
-          if float(self.ds_dict[self.var_dict[varname]].lat.data[0]) > float(self.ds_dict[self.var_dict[varname]].lat.data[-1]):
-             slat1 = int(vdict['latitude'][1])
-             slat2 = int(vdict['latitude'][0])
-          else:
-             slat1 = int(vdict['latitude'][0])
-             slat2 = int(vdict['latitude'][1])
-
-       else:
-
-          latvec = list(self.ds_dict[self.var_dict[varname]].lat.data)
-          slat1  = latvec[0]
-          slat2  = latvec[-1]
-
-       #  Determine longitude bounds.  If values are in vdict, use, otherwise, use entire array
-       if 'longitude' in vdict:
-
-          lon1 = int(vdict['longitude'][0])
-          lon2 = int(vdict['longitude'][1])
-
-       else:
-
-          lonvec = list(self.ds_dict[self.var_dict[varname]].lon.data)
-          lon1   = lonvec[0]
-          lon2   = lonvec[-1]
-
        #  Create attributes based on what is in the file
        attrlist = {}
        if 'description' in vdict:
@@ -230,13 +203,14 @@ class ReadGribFiles:
          attrlist['_FillValue'] = vdict['_FillValue']
 
        #  Create an empty xarray that can be used to copy data into
-       lonvec = list(self.ds_dict[self.var_dict[varname]].sel(lon=slice(lon1, lon2)).lon.data)
-       latvec = list(self.ds_dict[self.var_dict[varname]].sel(lat=slice(slat1, slat2)).lat.data)
+       lonvec = list(self.ds_dict[self.var_dict[varname]].sel(lon=slice(vdict['lon_start'], vdict['lon_end'])).lon.data)
+       latvec = list(self.ds_dict[self.var_dict[varname]].sel(lat=slice(vdict['lat_start'], vdict['lat_end'])).lat.data)
        ensarr = xr.DataArray(name='ensemble_data', data=np.zeros([nens, len(latvec), len(lonvec)]),
                              dims=['ensemble', 'latitude', 'longitude'], attrs=attrlist, 
                              coords={'ensemble': [i for i in range(nens)], 'latitude': latvec, 'longitude': lonvec}) 
 
        return(ensarr)
+
 
     #  Function to read a single ensemble member's forecast field
     def read_grib_field(self, varname, member, vdict):
@@ -252,54 +226,27 @@ class ReadGribFiles:
 
        vname = self.var_dict[varname]
 
-       if 'latitude' in vdict:
-
-          if float(self.ds_dict[vname].lat.data[0]) > float(self.ds_dict[vname].lat.data[-1]):
-             slat1 = int(vdict['latitude'][1])
-             slat2 = int(vdict['latitude'][0])
-          else:
-             slat1 = int(vdict['latitude'][0])
-             slat2 = int(vdict['latitude'][1])
-
-       else:
-
-          latvec = list(self.ds_dict[vname].lat.data)
-          slat1  = latvec[0]
-          slat2  = latvec[-1]
-
-       if 'longitude' in vdict:
-
-          lon1 = int(vdict['longitude'][0])
-          lon2 = int(vdict['longitude'][1])
-
-       else:
-
-          lonvec = list(self.ds_dict[vname].lon.data)
-          lon1   = lonvec[0]
-          lon2   = lonvec[-1]
-
        #  Read a single pressure level of data, if this is a variable that has pressure levels
        if 'isobaricInhPa' in vdict:
 
-          if float(self.ds_dict[vname].lev.data[0]) > float(self.ds_dict[vname].lev.data[-1]):
-            slev1 = int(vdict['isobaricInhPa'][1])
-            slev2 = int(vdict['isobaricInhPa'][0])
-          else:
-            slev1 = int(vdict['isobaricInhPa'][0])
-            slev2 = int(vdict['isobaricInhPa'][1])
-
           #  Rename the lat, lon, and pressure arrays to common convention
-          vout  = self.ds_dict[vname].sel(lat=slice(slat1, slat2), lon=slice(lon1, lon2), lev=slice(slev1, slev2), ens=slice(member+1, member+1), \
-                                time=slice(self.datef, self.datef)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+          vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                          lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                          lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                          time=slice(self.datef, self.datef),                \
+                                          ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
 
        #  Read the only level if it is a single level variable
        else:
 
           #  Rename the lat and lon arrays to common convention
-          vout  = self.ds_dict[vname].sel(lat=slice(slat1, slat2), lon=slice(lon1, lon2), ens=slice(member+1, member+1), \
-                                time=slice(self.datef, self.datef)).squeeze().rename({'lon': 'longitude','lat': 'latitude'})
+          vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']), \
+                                          lon=slice(vdict['lon_start'], vdict['lon_end']), \
+                                          time=slice(self.datef, self.datef),              \
+                                          ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'})
 
        return(vout)
+
 
     @staticmethod
     def __check_file_exists(filename):

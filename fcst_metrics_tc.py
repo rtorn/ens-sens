@@ -393,6 +393,7 @@ class ComputeForecastMetrics:
 
            #  Read SLP field, compute the minimum SLP within a specified distance of the center
            vDict = {'latitude': (lat_vec[n]-mslp_dll, lat_vec[n]+mslp_dll), 'longitude': (lon_vec[n]-mslp_dll,lon_vec[n]+mslp_dll)}
+           vDict = g1.set_var_bounds('sea_level_pressure', vDict)
            f_met_slp[n] = np.min(g1.read_grib_field('sea_level_pressure', n, vDict))*0.01
 
 #        if self.fhr > 0.0:
@@ -433,6 +434,7 @@ class ComputeForecastMetrics:
 
               vDict = {'latitude': (lat_vec[n]-ke_dll, lat_vec[n]+ke_dll), 
                        'longitude': (lon_vec[n]-ke_dll, lon_vec[n]+ke_dll), 'isobaricInhPa': (ke_level, ke_level)}
+              vDict = g1.set_var_bounds('zonal_wind', vDict)              
 
               #  Read zonal and meridonal wind within certain distance of TC center
               ul = g1.read_grib_field('zonal_wind', n, vDict).squeeze()
