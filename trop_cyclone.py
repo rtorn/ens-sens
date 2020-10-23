@@ -14,6 +14,17 @@ import atcf_tools as atools
 import track as tr
 
 def plot_ens_tc_track(atcf, bvital, storm, datea, config):
+    '''
+    Routine that creates a plot of the ensemble TC tracks over an entire forecast.  The plot can be
+    customized using the items in the vitals_plot section of the configuration file.  The result of this
+    routine is a plot of the ensemble tracks that will be placed in the graphics output directory.
+
+    Attributes:
+        atcf   (class):  ATCF class object that includes ensemble information
+        storm (string):  TC name that will go into plot
+        datea (string):  Initialization date (yyyymmddhh format)
+        config (dict.):  dictionary that contains configuration options (read from file)
+    '''
     
     output_dir = config.get('track_output_dir', '.')
     fhrint  = float(config.get('fhrint',6))
@@ -96,13 +107,14 @@ def plot_ens_tc_track(atcf, bvital, storm, datea, config):
     d = bvital.dim[0]
     bcnt = 0
 
+    # Plot best track position if desired (needs updating)
     for i in range(d):
         # print(bvital.get_value([i, 6]))
         if bvital.get_value([i, 6]) == math.inf:
             bcnt = bcnt + 1
     btype = bvital.get_value([0, 6])
 
-    while t <= bcnt and plot_best:  # Plot best track position if desired
+    while t <= bcnt and plot_best:
         if bvital.get_value([t, 6]) != btype or t == bcnt:
             if btype > 0.5:
                 linestyle = '-'
@@ -191,11 +203,24 @@ def plot_ens_tc_track(atcf, bvital, storm, datea, config):
     except FileExistsError:
         pass
 
+    #  Create the output plot, which is the result of this script
     plt.savefig(output_dir + "/" + config.get('trackfile',str(datea) + "_" + str(storm) + "_track.png"),format='png',dpi=150,bbox_inches='tight')
     plt.close()
 
 
 def plot_ens_tc_intensity(atcf, b_vital, storm, datea, config):
+    '''
+    Routine that creates a plot of the ensemble TC minimum SLP and maximum wind speed as a function of
+    forecast lead time.  The plot can be customized using the items in the vitals_plot section of the 
+    configuration file.  The result of this routine is a plot of the ensemble min. SLP and maximum wind
+    that will be placed in the graphics output directory.
+
+    Attributes:
+        atcf   (class):  ATCF class object that includes ensemble information
+        storm (string):  TC name that will go into plot
+        datea (string):  Initialization date (yyyymmddhh format)
+        config (dict.):  dictionary that contains configuration options (read from file)
+    '''
 
     output_dir = config.get('int_output_dir', '.')
     fhrint  = float(config.get('fhrint',6))
@@ -246,6 +271,7 @@ def plot_ens_tc_intensity(atcf, b_vital, storm, datea, config):
 #                    cnt = cnt + 1
     ax0 = fig.add_subplot(grid[0, 0:])
 
+    #  Plot each ensemble member's minimum SLP trace
     minval = 10000000000
     maxval = -10000000000.
     for n in range(nens):
@@ -258,6 +284,7 @@ def plot_ens_tc_intensity(atcf, b_vital, storm, datea, config):
              minval = min([minval, all_slp[n,t]])
              maxval = max([maxval, all_slp[n,t]])
        ax0.plot(sens_x, sens_y, color='gray')
+
 #    for s in range(nsub):
 #        mean_slp = []
 #        mean_y = []
@@ -268,12 +295,16 @@ def plot_ens_tc_intensity(atcf, b_vital, storm, datea, config):
 #            mean_slp.append(np.mean(mean_arr))
 #            mean_y.append(fvital.get_value([0, t, 5]))
 #        ax0.plot(mean_slp, mean_y)
+
+    #  Plot the best track minimum sea-level pressure, if it exists
     b_x_pres = []
     b_y_pres = []
     for i in range(dim_bvital[0]):
         b_x_pres.append(b_vital.get_value([i, 4]))
         b_y_pres.append(b_vital.get_value([i, 2]))
     ax0.plot(b_x_pres, b_y_pres, color='black')
+
+   #  Add plot labels and proper tick marks 
     ax0.set_xlabel("Forecast Hour")
     ax0.set_ylabel("Minimum Pressure (hPa)")
     plt.title("{0} ECMWF forecast of {1}".format(str(datea), storm))
@@ -281,6 +312,8 @@ def plot_ens_tc_intensity(atcf, b_vital, storm, datea, config):
     plt.xlim(0, fhrmax)
 
     ax1 = fig.add_subplot(grid[1, 0:])
+
+    #  Plot each ensemble member's maximum wind speed
     for n in range(nens):
        sens_x1 = []
        sens_y1 = []
@@ -291,12 +324,16 @@ def plot_ens_tc_intensity(atcf, b_vital, storm, datea, config):
              minval = min([minval, all_wnd[n,t]])
              maxval = max([maxval, all_wnd[n,t]])
        ax1.plot(sens_x1, sens_y1, color='gray')
+
+    #  Plot the best track maximum wind speed, if it exists
     b_x_wind = []
     b_y_wind = []
     for i in range(dim_bvital[0]):
         b_x_wind.append(b_vital.get_value([i, 4]))
         b_y_wind.append(b_vital.get_value([i, 3]))
     ax1.plot(b_x_wind, b_y_wind, color='black')
+
+    #  Add plot labels and proper tick marks
     ax1.set_xlabel("Forecast Hour")
     ax1.set_ylabel("Maximum Wind Speed (knots)")
     plt.xticks(range(0,240,24))
@@ -306,12 +343,24 @@ def plot_ens_tc_intensity(atcf, b_vital, storm, datea, config):
         os.makedirs(output_dir)
     except FileExistsError:
         pass
+
+    #  save the figure to a .png file in output graphics directory
     plt.savefig(output_dir + "/" + config.get('intfile',str(datea) + "_" + str(storm) + "_intensity.png"),format='png',dpi=150,bbox_inches='tight')
     plt.close()
 
 
 def atcf_ens_tc_vitals(atcf, best_file, datea, storm, fstid, bestmax, config, output_dir):
-    # files, data in string, storm id, unknown, unknown, unknown, dict for plotting variables with attributes
+    '''
+    Generic routine that can be called to create generic plots of the ensemble TC track and intensity 
+    information.  This routine calls the two indivdual routines that actually create the plots.    
+
+    Attributes:
+        atcf   (class):  ATCF class object that includes ensemble information
+        datea (string):  Initialization date (yyyymmddhh format)
+        storm (string):  TC name that will go into plot
+        fstid (string):  Name of the model forecast that is being plotted
+        config (dict.):  dictionary that contains configuration options (read from file)
+    '''
     
     maxbest = config.get('maxbest',120)
     fhrint  = float(config.get('fhrint',6))
@@ -333,6 +382,7 @@ def atcf_ens_tc_vitals(atcf, best_file, datea, storm, fstid, bestmax, config, ou
     gdatea = datetime.strptime(str(datea), '%Y%m%d%H')
     gdate_bm = gdatea.day + bestmax
 
+    #  This code is old and will likely be removed in future versions once the proper best track reading and query code is in atcf_tools.py
     if bestfile is not None:
         # print(1)
         # with open(bestfile, 'r') as fo:
