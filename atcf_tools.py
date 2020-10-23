@@ -1,26 +1,38 @@
 import os
-import shutil
 import sys
-import cfgrib
 import datetime as dt
 import glob
 import pandas as pd
 import numpy as np
-import xarray as xr
-
 
 class ReadATCFData:
+    '''
+    Class that reads ATCF-format data from an ensemble of files (assumes that each file contains one
+    ensemble member at one initialization time.  The class itself contains a series of dictionaries that
+    contain the TC track and intensity information.  The data is saved both with pandas and using a 
+    dictionary.  The data can be accessed through a series of routines.
+
+    This class is currently under development, especially the best track portions
+
+    Attributes:
+        infiles (string): list of ATCF ensemble member files
+
+    '''
+
     def __init__(self, infiles):
-        self.cols = ['basin', 'tcnum', 'datea', 'mm', 'ftype', 'fhr', 'lat', 'lon', 'wnd', 'mslp', 'stype', 'rval', 'ord', 'rad1', 'rad2', 'rad3', 'rad4', 'a']
+
+        self.cols = ['basin', 'tcnum', 'datea', 'mm', 'ftype', 'fhr', 'lat', 'lon', 'wnd', 'mslp', \
+                     'stype', 'rval', 'ord', 'rad1', 'rad2', 'rad3', 'rad4', 'a']
         self.atcf_files = {}
         self.atcf_array = {}
         self.no_atcf_files = 0
         self.missing = -9999.
-#        atcf_data = glob.glob(self.src_path+"/atcf_*.dat")
         atcf_data = glob.glob(infiles)
         atcf_data = sorted(atcf_data)
         self.no_atcf_files = len(atcf_data)
         for f in range(self.no_atcf_files):
+
+            #  Read entire file both through pandas and ascii reading routines
             file_name = "df_{0}".format(str((f + 1000))[1:])
             file_s = file_name
             file_name = pd.read_csv(filepath_or_buffer=atcf_data[f], header=None)
@@ -54,9 +66,12 @@ class ReadATCFData:
             r34swvec = []
             r34nwvec = []
 
+            #  Loop over lines in the ATCF file
             for line in range(n_lines):
                 self.atcf_array.get(f).update({line: [0 for i in range(11)]})
                 data[line] = data[line].strip()
+
+                #  Parse data and create entries that have all information for each file line
                 if str(data[line][38:39]) == "N":
                   self.atcf_array.get(f).get(line)[0] = float(data[line][35:38]) * 0.1
                 else:
@@ -70,6 +85,8 @@ class ReadATCFData:
                 self.atcf_array.get(f).get(line)[4] = 0.0
                 self.atcf_array.get(f).get(line)[5] = float(str(data[line][30:33]).strip())
                 self.atcf_array.get(f).get(line)[10] = float(data[line][20:22])
+
+                #  handle wind radii data, if it exists in the file
                 if n_cols >= 64:
                     if str(data[line][63:66]) != "   ": 
                         if int(data[line][63:66]) == 34:
@@ -83,6 +100,7 @@ class ReadATCFData:
                 fhr = float(str(data[line][30:33]).strip())
                 if fhr != prfhr:
 
+                   #  append TC data to quantity-specific vectors, such as lat, lon, slp, etc.
                    ntimes = ntimes + 1
                    fhrvec.append(float(str(data[line][30:33]).strip()))
                    prfhr = float(str(data[line][30:33]).strip())
@@ -105,6 +123,7 @@ class ReadATCFData:
                    r34swvec.append(None)
                    r34nwvec.append(None)
 
+                #  Add 34 knot wind radii data if available
                 if n_cols >= 64:
                    if int(data[line][63:66]) == 34:
                       r34nevec[ntimes] = float(data[line][73:77])
@@ -112,7 +131,7 @@ class ReadATCFData:
                       r34swvec[ntimes] = float(data[line][85:89])
                       r34nwvec[ntimes] = float(data[line][91:95])
 
-
+            #  Append final vectors into the dictionary 
             self.atcf_array.get(f).update({'initialization_time': datea})
             self.atcf_array.get(f).update({'forecast_id': fctid})
             self.atcf_array.get(f).update({'num_lines': n_lines})
@@ -124,12 +143,18 @@ class ReadATCFData:
             self.atcf_array.get(f).update({'max_wind_speed': wndvec})
 
     def ens_lat_lon_time(self, fhr):
-#        ens_lat = list(np.zeros(len(self.atcf_files)))
-#        ens_lon = list(np.zeros(len(self.atcf_files)))
+        '''
+        Function that returns all ensemble member's latitude and longitude for a given 
+        forecast hour.  The result is two vectors, one with the latitude and one with
+        the ensemble TC longitude.
+      
+        Attributes:
+            fhr (int):  forecast hour
+        '''
+
         ens_lat = list(np.ones(len(self.atcf_files)) * self.missing)
         ens_lon = list(np.ones(len(self.atcf_files)) * self.missing)
         for n in range(len(self.atcf_files)):
-           x = "df_{0}".format(str((n + 1000))[1:])
            if fhr in list(self.atcf_array.get(n)['forecast_hour']):
               i = list(self.atcf_array.get(n)['forecast_hour']).index(fhr)
               ens_lat[n]=self.atcf_array.get(n)['latitude'][i]
@@ -138,8 +163,15 @@ class ReadATCFData:
         return ens_lat, ens_lon
 
     def ens_intensity_time(self, fhr):
-#        ens_slp = list(np.zeros(len(self.atcf_files)))
-#        ens_wnd = list(np.zeros(len(self.atcf_files)))
+        '''
+        Function that returns all ensemble member's minimum sea-level pressure and
+        maximum wind speed for a given forecast hour.  The result is two vector arrays, 
+        one with the ensemble SLP, and the other with the ensemble maximum wind.
+      
+        Attributes:
+            fhr (int):  forecast hour
+        '''
+
         ens_slp = list(np.ones(len(self.atcf_files)) * self.missing)
         ens_wnd = list(np.ones(len(self.atcf_files)) * self.missing)
         for n in range(len(self.atcf_files)):
@@ -151,6 +183,16 @@ class ReadATCFData:
         return ens_slp, ens_wnd
 
     def get_best_data(self, bestfile):
+        '''
+        Function that reads the best track data from the specified best track file 
+        and saves this within the current ATCF class.  This data will be accessed 
+        through the current ATCF class. 
+        ****** ROUTINE CURRENTLY UNDER CONSTRUCTION ******
+      
+        Attributes:
+            bestfile (string):  best track file to read
+        '''
+
 #        bestpath = 'b' + storm + '.dat'
 #        bestfile = os.path.join(self.src_path, bestpath)
         try:
