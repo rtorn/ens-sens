@@ -1,16 +1,12 @@
 import math
-import cfgrib
 import numpy as np
 import xarray as xr
-import glob
 import json
-import pandas as pd
 import numpy as np
 import datetime as dt
 
 import matplotlib
 from IPython.core.pylabtools import figsize, getfigs
-import sys
 import importlib
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
@@ -24,10 +20,32 @@ from math import radians, degrees, sin, cos, asin, acos, sqrt
 
 #####   Function to compute the great circle distance between two points
 def great_circle(lon1, lat1, lon2, lat2):
+    '''
+    Function that computes the distance between two lat/lon pairs.  The result of this function 
+    is the distance in kilometers.
+
+    Attributes
+        lon1 (float): longitude of first point
+        lat1 (float): latitude of first point
+        lon2 (float): longitude of second point
+        lat2 (float): latitude of second point
+    '''
+
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
     return 6371. * acos(np.minimum(sin(lat1) * sin(lat2) + cos(lat1) * cos(lat2) * cos(lon1 - lon2),1.0))
 
+
 class ComputeForecastMetrics:
+    '''
+    Function that computes ensemble-based estimates of TC forecast metrics based on the information
+    within the configuration file.  Each of these metrics is stored in a seperate netCDF file that
+    is used to compute the sensitivity.
+
+    Attributes:
+        datea (string): initialization date of the forecast (yyyymmddhh format)
+        atcf   (class):  ATCF class object that includes ensemble information
+        config (dict.):  dictionary that contains configuration options (read from file)
+    '''
 
     def __init__(self, datea, atcf, config):
 
@@ -150,7 +168,15 @@ class ComputeForecastMetrics:
         #  Compute integrated intensity EOF metric
         self.__intensity_eof()
 
+
     def __f_metric_tc_el_track(self):
+        '''
+        Function that computes the ensemble member's displacement from the ensemble-mean position in the direction
+        of the largest ensemble position variability and in the direction that is normal to it.  The result of
+        this function is two xarray objects with the ensemble estimates of these two forecast metrics (these are
+        saved into netCDF files in the main routine). 
+        '''
+
         e_cnt = 0.0
         x_mean = 0.0
         y_mean = 0.0
@@ -247,10 +273,17 @@ class ComputeForecastMetrics:
                                                               'attrs': {'description': 'TC minor axis track error',
                                                                         'units': 'km', '_FillValue': self.missing},
                                                               'data': f_met_min}}}
+
         return forecast_maj_track, forecast_min_track
 
-    ####  Function to compute the along/across track distance relative to the ensemble mean
+
     def __f_metric_tc_ax_track(self):
+        '''
+        Function that computes the ensemble member's displacement from the ensemble-mean position in the along
+        and across direction.  The result of this function is two xarray objects with the ensemble estimates of 
+        these two forecast metrics (these are saved into netCDF files in the main routine). 
+        '''
+
         m_lat = 0.0
         m_lon = 0.0
         e_cnt = 0.0
@@ -356,13 +389,16 @@ class ComputeForecastMetrics:
                                                              'attrs': {'description': 'TC across track error',
                                                                        'units': 'km', '_FillValue': self.missing},
                                                              'data': f_met_ax}}}
+        
         return forecast_al_track, forecast_ax_track
 
-    def __intensity_metrics(self):
 
+    def __intensity_metrics(self):
         """
-        Import all data variables into a list of dataset 
-        Add each data variable to a dictionary with a key as its name and value as a dataset for the data variable
+        Routine that computes TC intensity-based forecast metrics from each ensemble member.  Currently, the 
+        code computes the minimum SLP (always) and kinetic energy within a certain distance of the TC center
+        on a certain pressure level (optional).  The result of this function is the ensemble forecast metrics,
+        which are saved to netCDF files.
         """
 
         #  Read the ATCF information for this lead time
@@ -382,6 +418,7 @@ class ComputeForecastMetrics:
         m_lon = m_lon / e_cnt
         m_lat = m_lat / e_cnt
 
+        #  Replace missing lat/lon with the ensemble mean.
         for n in range(self.nens):
            if lat_vec[n] == self.atcf.missing or lon_vec[n] == self.atcf.missing:
               lat_vec[n] = m_lat
@@ -482,8 +519,14 @@ class ComputeForecastMetrics:
            xr.Dataset.from_dict(f_met_kmetric_nc).to_netcdf(
                    self.outdir + "/{1}_f{0}_ke_10m.nc".format(self.fff, str(self.datea_str)), encoding={'fore_met_init': {'dtype': 'float32'}})
 
-    ####   Function to compute the integrated track EOF metric
+
     def __position_eof(self):
+        '''
+        Function that computes time-integrated track metric, which is calculated by taking the EOF of 
+        the ensemble latitude and longitude for the lead times specified.  The resulting forecast metric is the 
+        principal component of the EOF.  The function also plots a figure showing the TC tracks and the 
+        track perturbation that is consistent with the first EOF. 
+        '''
 
         print('  Computing time-integrated track metric')
 
@@ -706,7 +749,7 @@ class ComputeForecastMetrics:
             if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
               y.append(ens_lat[n,t])
               x.append(ens_lon[n,t])
-            ax.plot(x, y, color='lightgray', zorder=1, transform=ccrs.Geodetic())
+          ax.plot(x, y, color='lightgray', zorder=1, transform=ccrs.Geodetic())
 
         #  Plot the ensemble mean and track perturbation
         ax.plot(m_lon, m_lat, color='black', linewidth=3, zorder=15, transform=ccrs.Geodetic())        
@@ -771,7 +814,7 @@ class ComputeForecastMetrics:
         plt.savefig("TC_position_eof.png",format='png',dpi=150,bbox_inches='tight')
         plt.close()
 
-
+        #  Create xarray object of forecast metric, write to file.
         f_met_trackeof_nc = {'coords': {},
                              'attrs': {'FORECAST_METRIC_LEVEL': '',
                                        'FORECAST_METRIC_NAME': 'integrated track PC',
@@ -787,8 +830,14 @@ class ComputeForecastMetrics:
         xr.Dataset.from_dict(f_met_trackeof_nc).to_netcdf(
             self.outdir + "/{1}_f{0}_intmajtrack.nc".format(self.config['metric'].get('track_eof_hour_final',120), str(self.datea_str)), encoding={'fore_met_init': {'dtype': 'float32'}})
 
-    ####  Function to compute the time-integrated intensity metric (MSLP)
+
     def __intensity_eof(self):
+        '''
+        Function that computes time-integrated minimum SLP metric, which is calculated by taking the EOF of 
+        the ensemble minimum SLP forecast.  The resulting forecast metric is the principal component of the
+        EOF.  The function also plots a figure showing the TC minimum SLP and maximum wind, along with the 
+        min. SLP and max. wind perturbation that is consistent with the first EOF. 
+        '''
 
         print('  Computing time-integrated intensity metric')
 
