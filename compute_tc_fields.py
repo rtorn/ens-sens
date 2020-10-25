@@ -2,8 +2,6 @@ import os
 import importlib
 import math
 import netCDF4 as nc
-import cfgrib
-import sys
 import numpy as np
 import datetime as dt
 #from windspharm.standard import VectorWind
@@ -12,8 +10,20 @@ import metpy.constants as mpcon
 import metpy.calc as mpcalc
 from metpy.units import units
 
-####   Class for computing forecast fields for TC sensitivity calculations
 class ComputeTCFields:
+    '''
+    Class that computes individual 2D ensemble forecast fields for a given forecast hour.  These ensemble fields 
+    will be used in the next stage of the code to compute the sensitivity.  The result will be a series of netCDF
+    files, one for each forecast field, that contains all ensemble members.  The forecast fields that are computed
+    are determined via the configuration options.
+
+    Attributes:
+        datea (string):  initialization date of the forecast (yyyymmddhh format)
+        fhr      (int):  forecast hour
+        atcf   (class):  ATCF class object that includes ensemble information
+        config (dict.):  dictionary that contains configuration options (read from file)
+    '''
+
     def __init__(self, datea, fhr, atcf, config):
         # Forecast fields to compute
 
@@ -22,20 +32,17 @@ class ComputeTCFields:
         n_wnd_lev = len(wnd_lev_1)
 
         # Read steering flow parameters, or use defaults
-        # steer info
-        steerp1 = 300
-        steerp2 = 850.0
-        tcradius = 333.0
+        steerp1  = float(config['fields'].get('steer_level1', '300'))
+        steerp2  = float(config['fields'].get('steer_level2', '850'))
+        tcradius = float(config['fields'].get('steer_radius', '333'))
 
         # lat_lon info
         lat1 = float(config['fields'].get('min_lat','0.'))
         lat2 = float(config['fields'].get('max_lat','65.'))
         lon1 = float(config['fields'].get('min_lon','-180.'))
         lon2 = float(config['fields'].get('max_lon','-10.'))
+
         self.fhr = fhr
-        self.deg2rad = 0.01745
-        self.earth_radius = 6378
-        self.deg2km = self.earth_radius * math.radians(1)
         self.atcf_files = atcf.atcf_files
         self.config     = config       
         self.nens = int(len(self.atcf_files))
@@ -70,11 +77,13 @@ class ComputeTCFields:
                 self.ens_lat[n] = m_lat
                 self.ens_lon[n] = m_lon
 
+        #  Read grib file information for this forecast hour
         g1 = self.dpp.ReadGribFiles(self.datea_str, self.fhr, self.config)
 
         dencode = {'ensemble_data': {'dtype': 'float32'}, 'latitude': {'dtype': 'float32'},
                    'longitude': {'dtype': 'float32'}, 'ensemble': {'dtype': 'int32'}}
 
+        #  Compute steering wind components
         uoutfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_usteer_ens.nc'
         voutfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_vsteer_ens.nc'
         if (not os.path.isfile(uoutfile) or not os.path.isfile(voutfile)) and config['fields'].get('calc_uvsteer','True') == 'True':
@@ -122,7 +131,6 @@ class ComputeTCFields:
              os.remove('wind_info.nc')
 
              #  Integrate the winds over the layer to obtain the steering wind
-#             pres      = np.array(uwnd.isobaricInhPa.data)
              pres,lat,lon = uwnd.indexes.values()
              nlev      = len(pres)
 
@@ -143,6 +151,7 @@ class ComputeTCFields:
                slat1 = lat1
                slat2 = lat2
 
+             #  Write steering flow to ensemble arrays
              uensmat[n,:,:] = np.squeeze(uint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[nlev-1]-pres[0])
              vensmat[n,:,:] = np.squeeze(vint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[nlev-1]-pres[0])
 
@@ -222,6 +231,7 @@ class ComputeTCFields:
 
           print("  Obtaining 250 hPa PV data from " + outfile)
 
+        #  Compute the 700 hPa equivalent potential temperature (if desired and file is missing)
         outfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_e700_ens.nc'
         if (not os.path.isfile(outfile) and config['fields'].get('calc_the700hPa','False') == 'True'):
 
@@ -252,7 +262,7 @@ class ComputeTCFields:
 
           print("  Obtaining 700 hPa Theta-e data from " + outfile)
 
-        #  Compute the 500-850 hPa water vapor mixing ratio, or read from file
+        #  Compute the 500-850 hPa water vapor mixing ratio (if desired and file is missing)
         outfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_q500-850_ens.nc'
         if (not os.path.isfile(outfile) and config['fields'].get('calc_q500-850hPa','False') == 'True'):
 
@@ -281,6 +291,7 @@ class ComputeTCFields:
 
             ensmat[n,:,:] = 0.0
 
+            #  Integrate water vapor over the pressure levels
             for k in range(len(pres)-1):
               ensmat[n,:,:] = ensmat[n,:,:] + 0.5 * (qvap[k,:,:]+qvap[k+1,:,:]) * abs(pres[k]-pres[k+1])
 

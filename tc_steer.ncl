@@ -51,6 +51,7 @@ loncen = uwnd
 latarr = uwnd
 lonarr = uwnd
 
+;  Create 3D latitude and longitude arrays
 do i = 0, nlon-1
 do j = 0, nlat-1
   lonarr(:,j,i) = (/ lon(i) /)
