@@ -1,21 +1,26 @@
-import matplotlib
-from IPython.core.pylabtools import figsize, getfigs
 import os
-
 import sys
 import netCDF4 as nc
-import matplotlib.pyplot as plt
-import cartopy
-import cartopy.crs as ccrs
 import numpy as np
-from matplotlib import colors
-from cartopy.feature import NaturalEarthFeature
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
-from math import radians, degrees, sin, cos, asin, acos, sqrt
 from SensPlotRoutines import plotVecSens, plotScalarSens, computeSens, writeSensFile
 
-####   Class for computing TC-related sensitivity fields for a single metric and forecast lead time
 class ComputeSensitivity:
+    '''
+    This class is the workhorse of the code because it computes the sensitivity of a given forecast
+    metric, which is computed for each ensemble member earlier in the code, to a set of forecast 
+    fields at a given forecast hour.  These forecast fields were also computed and placed in separate
+    netCDF files in an earlier routine.  The result of this routine is a set of sensitivity graphics
+    that can be used for various purposes, and if desired netCDF files that can be ingested into
+    AWIPS, or into the traveling salesman software for flight planning.  Note that this routine is 
+    called several times within the main code; therefore, it could be parallelized.
+
+    Attributes:
+        datea   (string):  initialization date of the forecast (yyyymmddhh format)
+        fhr        (int):  forecast hour
+        metname (string):  name of forecast metric to compute sensitivity for
+        atcf     (class):  ATCF class object that includes ensemble information
+        config   (dict.):  dictionary that contains configuration options (read from file)
+    '''
 
     def __init__(self, datea, fhr, metname, atcf, config):
 
@@ -38,6 +43,7 @@ class ComputeSensitivity:
       elif storm[-1] == "w":
         bbnn = "wp" + config['storm'][-3:-1]
 
+      #  Compute the ensemble-mean lat/lon for plotting
       elat, elon = atcf.ens_lat_lon_time(fhr)
 
       m_lat = 0.0
@@ -75,6 +81,7 @@ class ComputeSensitivity:
         ivec = 1.0
         jvec = 0.0
 
+      #  Create dictionary for storm-centered figures
       stceDict = plotDict.copy()
       stceDict['output_sens']=False
       stceDict['range_rings']='True'
@@ -157,7 +164,7 @@ class ComputeSensitivity:
       plotVecSens(lat, lon, sens, umea, vmea, sigv, outdir + '/' + datea + "_f" + fhrt + "_masteer_sens.png", stceDict)
 
 
-      #  Read 250 hPa PV, compute sensitivity to that field
+      #  Read 250 hPa PV, compute sensitivity to that field, if the file exists
       if os.path.isfile(config['work_dir'] + "/" + datea + "_f" + fhrt + "_pv250_ens.nc"): 
       
          efile = nc.Dataset(config['work_dir'] + "/" + datea + "_f" + fhrt + "_pv250_ens.nc")
