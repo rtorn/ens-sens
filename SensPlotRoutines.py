@@ -12,8 +12,18 @@ from cartopy.feature import NaturalEarthFeature
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from math import radians, degrees, sin, cos, asin, acos, sqrt
 
-#####   Function that adds dropsonde markers to a plot
+
 def addDrop(dropfile, plt, plotDict):
+  '''
+  This function adds markers that represent dropsonde locations based on the *_drop.txt files
+  produced by NHC.  Users can specify the style of the markers using configuration file 
+  parameters.
+
+  Attributes:
+      dropfile (string):  name of dropsonde file to plot
+      plt      (object):  matplotlib object to add the dropsonde markers to
+      plotDict (dict.):   dictionary that contains configuration options
+  '''
 
   msize  = plotDict.get('drop_mark_size', 6)
   mcolor = plotDict.get('drop_mark_color', 'black') 
@@ -27,6 +37,7 @@ def addDrop(dropfile, plt, plotDict):
       droplat = np.zeros(ndrops)
       droplon = np.zeros(ndrops)
 
+      #  Loop over dropsonde locations, convert text to lat/lon, plot
       for i in range(ndrops):
         str1 = intext[13+i]
         droplat[i] = float(str1[7:9]) + float(str1[10:12])/60.
@@ -38,8 +49,18 @@ def addDrop(dropfile, plt, plotDict):
   except FileNotFoundError:
     pass
 
-#####   Function that adds rawinsonde markers to a plot
+
 def addRawin(rawinfile, plt, plotDict):
+  '''
+  This function adds markers that represent rawinsonde locations based on a file that is 
+  taken from AWIPS.  Users can specify the style of the markers using configuration file 
+  parameters.
+
+  Attributes:
+      rawinfile (string):  name of rawinsonde file to plot
+      plt       (object):  matplotlib object to add the rawinsonde markers to
+      plotDict   (dict.):  dictionary that contains configuration options
+  '''
 
   msize  = plotDict.get('rawin_mark_size', 6)
   mcolor = plotDict.get('rawin_mark_color', 'gray')
@@ -61,8 +82,18 @@ def addRawin(rawinfile, plt, plotDict):
   except FileNotFoundError:
     pass
 
-#####  Function that computes ensemble-based sensitivity between metric and field 
+
 def computeSens(ens, evar, metric):
+  '''
+  Function that computes the sensitivity of the forecast metric to the provided
+  field using the ensemble-based sensitivity technique and the confidence bounds 
+  on the regression coefficient at each grid point.
+
+  Attributes:
+      ens    (float):  array that contains the ensemble estimate of a field
+      evar   (float):  array that is the ensemble variance of forecast field
+      metric (float):  vector of ensemble estimates of forecast metric
+  '''
 
   sens = np.zeros(evar.shape)
   sigv = np.zeros(evar.shape)
@@ -80,16 +111,40 @@ def computeSens(ens, evar, metric):
 
   return sens, sigv
 
-def exists(var):
-     var_exists = var in locals() or var in globals()
-     return var_exists
 
 def great_circle(lon1, lat1, lon2, lat2):
+    '''
+    Function that computes the distance between two lat/lon pairs.  The result of this function
+    is the distance in kilometers.
+
+    Attributes
+        lon1 (float): longitude of first point
+        lat1 (float): latitude of first point
+        lon2 (float): longitude of second point
+        lat2 (float): latitude of second point
+    '''
+
     lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
     return 6371. * (acos(sin(lat1) * sin(lat2) + cos(lat1) * cos(lat2) * cos(lon1 - lon2)))
 
-#####  Function to write sensitivity fields to a netcdf file
+
 def writeSensFile(lat, lon, fhr, emea, sens, sigv, sensfile, plotDict):
+  '''
+  Routine that writes a netCDF file that includes the ensemble-mean forecast field, 
+  sensitivity, and measure of statistical significance.  This file can be ingested into
+  other programs for plotting, such as AWIPS, or could be used within the traveling 
+  salesman flight planning software that NHC uses.
+
+  Attributes:
+      lat       (float):  Vector of latitude values
+      lon       (float):  Vector of longitude values
+      fhr         (int):  Forecast hour
+      emea      (float):  2D array of the ensemble-mean field
+      sens      (float):  2D array of sensitivity field
+      sigv      (float):  2D array of statistical significance
+      sensfile (string):  Name of netCDF file
+      plotDict  (dict.):  Dictionary that contains configuration options
+  '''
 
   #  Create file and dimensions
   ncfile = nc.Dataset(sensfile, mode='w')
@@ -145,8 +200,24 @@ def writeSensFile(lat, lon, fhr, emea, sens, sigv, sensfile, plotDict):
 
   ncfile.close()
 
-#####  Function to plot sensitivity of a scalar (contoured ensemble mean)
+
 def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
+  '''
+  Function that plots the sensitivity of a forecast metric to a scalar field, along
+  with the ensemble mean field in contours, and the statistical significance in 
+  stippling.  The user has the option to add customized elements to the plot, including
+  range rings, locations of rawinsondes/dropsondes, titles, etc.  These are all turned
+  on or off using the configuration file.
+
+  Attributes:
+      lat      (float):  Vector of latitude values
+      lon      (float):  Vector of longitude values
+      sens     (float):  2D array of sensitivity field
+      emea     (float):  2D array of the ensemble-mean field
+      sigv     (float):  2D array of statistical significance
+      fileout (string):  Name of output figure in .png format
+      plotDict (dict.):  Dictionary that contains configuration options
+  '''
 
   minLat = float(plotDict.get('min_lat', np.amin(lat)))
   maxLat = float(plotDict.get('max_lat', np.amax(lat)))
@@ -228,8 +299,24 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
   plt.close(fig)
 
 
-#####  Function to plot sensitivity of a vector component (vector ensemble mean)
 def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
+  '''
+  Function that plots the sensitivity of a forecast metric to the component of a vector, 
+  along with the ensemble mean wind barbs, and the statistical significance in
+  stippling.  The user has the option to add customized elements to the plot, including
+  range rings, locations of rawinsondes/dropsondes, titles, etc.  These are all turned
+  on or off using the configuration file.
+
+  Attributes:
+      lat      (float):  Vector of latitude values
+      lon      (float):  Vector of longitude values
+      sens     (float):  2D array of sensitivity field
+      umea     (float):  2D array of the ensemble-mean zonal wind
+      vmea     (float):  2D array of the ensemble-mean meridional wind
+      sigv     (float):  2D array of statistical significance
+      fileout (string):  Name of output figure in .png format
+      plotDict (dict.):  Dictionary that contains configuration options
+  '''
 
   minLat = float(plotDict.get('min_lat', np.amin(lat)))
   maxLat = float(plotDict.get('max_lat', np.amax(lat)))
@@ -309,4 +396,3 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
 
   plt.savefig(fileout,format='png',dpi=120,bbox_inches='tight')
   plt.close(fig)
-
