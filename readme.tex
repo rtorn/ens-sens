@@ -1,0 +1,253 @@
+\documentclass[psfig,12pt]{article}
+\newif\ifpdf
+   \ifx\pdfoutput\undefined
+   \pdffalse % we are not running PDFLaTeX
+   \else
+   \pdfoutput=1 % we are running PDFLaTeX
+   \pdftrue
+\fi
+
+\ifpdf
+   \usepackage[pdftex]{graphicx}
+   \else
+   \usepackage{graphicx}
+\fi
+
+\usepackage{amssymb}
+\usepackage[T1]{fontenc}
+\usepackage{times}
+
+\setlength{\topmargin}{0pt}
+\setlength{\headheight}{0pt} % *** for xdvi and ps ***
+\setlength{\headsep}{0pt}
+\setlength{\textheight}{9.0truein}
+\setlength{\textwidth}{6.5truein}
+\setlength{\footskip}{24pt}
+\setlength{\oddsidemargin}{0pt}
+\setlength{\marginparsep}{2pt}
+\setlength{\marginparwidth}{5pt}
+\setlength{\parskip}{1em}
+\hyphenpenalty=2000
+\renewcommand{\baselinestretch}{1.0}
+
+%%%%% Start document %%%%%
+\begin{document}
+\pagestyle{empty}
+
+\centering
+{\Large\bf NHC Ensemble-based Sensitivity Code Readme}
+\flushleft
+\vspace{0.3in}
+
+This document provides a description of the enclosed code, that can be used to compute ensemble-based
+sensitivity from gridded ensemble forecast data.  The enclosed set of code is written in conda python
+and is designed to work with any grib files that contain forecast data on a lat/lon grid.  Most of the
+settings for this program are set within a configuration/parameter file, while the date, storm, and
+parameter file itself are set at the command line.  Furthermore,
+the code is designed to work for a variety of models and computing locations.  Those differences related
+to various locations and models is also isolated to the individual i/o module, which has common routine
+names, but does all of the model/location specific differences inside of it and is transparent to 
+the rest of the code.
+
+The code itself consists of four distinct stages, all of which are controled by run\_NHC\_sens.py
+
+\begin{enumerate}
+\item Data staging and preparation (model and platform specific)
+\item Computing forecast metrics (fcst\_metrics\_tc.py)
+\item Compute forecast fields to compute sensitivity to (compute\_tc\_fields.py)
+\item Compute sensitivity and generate maps (nhc\_sens.py)
+\end{enumerate}
+
+In order to generate sensitivity output, the user should run the following code from the unix 
+command line, which is the command for the Hurricane Laura forecast initialized 0000~UTC 22 August 2020:
+
+\vspace{0.1in}
+python run\_NHC\_sens.py --init 2020082200 --storm laura13l --param ecmwf\_teton.py, 
+\vspace{0.1in}
+
+where the --init argument is the forecast initialization date in yyyymmddhh format, --storm is the 
+TC name, including both the name, TC number, and the basin.  The TC number and basin are necessary 
+as the code parses the storm text string to figure out the basin and TC number.  Finally, --param is
+the path to the paramter/configuration file, that contains a number of configuration options that are
+meant to be static from one initialization time/storm to another, but still gives the user the option
+to change how the code executes, or how the plots look.  Most of the configuration options have 
+default values, though some MUST be set within the file for the code to work.  The tables below list 
+the individual parameter/configuration options available and the default values, where appropriate.
+
+The outcome of running this code is a set of output directories that include the graphical and 
+gridded sensitivity output.  The format of these directory is:
+
+\vspace{0.1in}
+\{html\_dir\}/\{storm\}\_\{yyyymmddhh\}/\{metric\}/sens/\{field\},
+\vspace{0.1in}
+
+where storm is the name of the TC (same as --storm line above), yyyymmddhh is the initialization date
+(same as --init line above), metric is the name of each forecast metric, where each forecast metric has its own
+directory.  For example, the integrated track metric (the default metric of the code) is named 
+f120\_intmajtrack.  Positive values of the metric are indicative of a TC that will end up further along and/or i
+to the right of the ensemble-mean track.  The advantage of using this position metric is that it does not 
+require specifying a particular lead time and takes into account the temporal correlation of forecast tracks 
+(i.e., members that are further west early in the forecast will end up further west later on).  The user
+can specify additional metrics to compute sensitivity for using the metrics configuration option.
+
+Within each forecast metric directory are two sub-directories, one is called sens,
+which are the sensitivity plots/grids on a fixed domain, while the other are the plots/grids on a storm-centered
+grid.  Within each of these directories is a set of subdirectories that represent individual
+forecast fields that you are computing the sensitivity to.  The forecast hour in each file's name is the
+forecast lead time that you are computing the sensitivity to (i.e., a file starting with 202008200\_f036 is 
+the sensitivity of the metric to the 36~h forecast fields.).  The table below gives the list of fields
+for which the sensitivity of TC track/position forecasts are computed and what they represent:
+
+\begin{table}[H]
+\begin{center}
+\begin{tabular}{|p{1.25in}|p{5.0in}|}
+\hline
+Parameter Name & Description \\  \hline\hline
+usteer & Zonal component of the steering flow.  By default, this is designated as the average wind between
+300-850~hPa (vortex removed), but this can be changed in the configuration file. \\ \hline
+vsteer & Meridional component of the steering flow.  By default, this is designated as the average wind between
+300-850~hPa (vortex removed), but this can be changed in the configuration file. \\ \hline
+masteer & Major axis winds are the wind component that is in the direction of greatest track variability for 
+that particular case (positive values are either along and/or right of track).  In most situations, the 
+sensitivity to the major axis wind is the most useful for sensitivity calculations because it most closely 
+relates to variability in subsequent TC position, which is not often in the Cartesian directions.  \\ \hline
+pv250hPa & 250 hPa potential vorticity \\ \hline
+h500 & 500 hPa height \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[H]
+\caption{Configuration options for the model subset.}
+\begin{center}
+\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\hline
+Parameter Name & Type & Description \\  \hline\hline
+model\_src & string & Name of the model being used in the sensitivity calculation.  This is mainly used in
+plot titles, so the user can set to whatever they want.  No default value.  \\  \hline
+io\_module & string & Name of the module to use for obtaining and reading the grib and ATCF file.  Each
+platform and model will have its own module.  This value MUST be set by the user. \\  \hline
+num\_ens & integer & Number of perturbation ensemble members (i.e., ECMWF has 50 perturbed members, 
+GEFS has 30).  No default value, so it must be set. \\  \hline
+fcst\_hour\_int & integer & Forecast hour interval for computing forecast fields for sensitivity 
+calculations in hours.  Default:  12 h \\  \hline
+fcst\_hour\_max & integer & Last forecast hour to compute forecast fields for sensitvity 
+calculations in hours.  Default 120 h \\  \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[H]
+\caption{Configuration options for the local subset.}
+\begin{center}
+\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\hline
+Parameter Name & Type & Description \\ \hline\hline
+atcf\_dir & string & Path to raw ATCF forecast data on local server.  No default value \\ \hline
+model\_dir & string & Path to raw model data on local server.  No default value \\ \hline
+work\_dir & string & Path to work directory where sensitivity calculations are carried out
+No default value. \\ \hline
+output\_dir & string & Path to directory to save certain output of the sensitivity 
+calculations, if desired.  No default value.  \\ \hline
+script\_dir & string & Path to python scripts and modules (i.e., where this code is located.)
+No default value. \\ \hline
+html\_dir & string & Path to directory where output figures will be placed.
+No default value.  \\ \hline
+outgrid\_dir & string & Path to directory where gridded sensitivity output will be placed.
+No default value.  \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[H]  
+\caption{Configuration options for the vitals\_plot subset.}
+\begin{center}
+\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\hline
+Parameter Name & Type & Description \\ \hline \hline
+trackfile & string & Name of figure that shows the TC track forecast.  Default:  track.png \\ \hline
+intfile & string & Name of figure that shows the TC intensity forecast.  Default:  intensity.png \\ \hline
+forecast\_hour\_max & string & Maximum forecast hour for track and intensity plots.  
+Default:  120 hours \\ \hline
+grid\_interval & float & Latitude and Longitude line grid interval in degrees.  
+Default:  5$^{\circ}$.  \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[H]
+\caption{Configuration options for the metric subset.}
+\begin{center}
+\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\hline
+Parameter Name & Type & Description \\ \hline \hline
+metric\_hours & float & Vector list of forecast hours to compute forecast metrics.  No default value \\ \hline
+int\_track\_fhr1 & float & Initial forecast hour to use for integrated track metric.  Default:  24~h \\ \hline
+int\_track\_fhr1 & float & Final forecast hour to use for integrated track metric.  Default:  120~h \\ \hline
+kinetic\_energy\_metric & logical & True to calculate area-average kinetic energy metric.
+Default:  False \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[H]
+\caption{Configuration options for the field subset.}
+\begin{center}
+\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\hline
+Parameter Name & Type & Description \\ \hline \hline
+calc\_steer\_circ & logical & True to compute the circulation/vorticity from the steering wind.  
+Default:  False \\ \hline
+calc\_pv250hPa & logical & True to compute PV on the 250 hPa surface.  Default:  True \\ \hline
+calc\_the700hPa & logical & True to compute 700 hPa equivalent potential temperature.  
+Default:  False \\ \hline
+calc\_q500-850hPa & logical & True to compute the integrated water vapor between 500 and 
+850~hPa.  Default:  False \\ \hline
+min\_lat & float & Minimum latitude to compute forecast fields over.  Default:  0.0 \\ \hline
+max\_lat & float & Maximum latitude to compute forecast fields over.  Default:  65.0 \\ \hline
+min\_lon & float & Minimum longitude to compute forecast fields over.  Default:  -180.0 \\ \hline
+max\_lon & float & Maximum longitude to compute forecast fields over.  Default:  -10.0 \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\begin{table}[H]
+\caption{Configuration options for the sens subset.  This set of parameters set the display options
+for the sensitivity plots.}
+\begin{center}
+\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\hline
+Parameter Name & Type & Description \\  \hline \hline
+metrics & string & List of names of forecast metrics to compute the sensitivity to.  
+Default:  none \\ \hline
+min\_lat & float & Minimum latitude for sensitivity plots.  Default:  8.0, also set in
+run\_NHC\_sens.py based on basin.  \\ \hline
+max\_lat & float & Maximum latitude for sensitivity plots.  Default:  65.0, also set in
+run\_NHC\_sens.py based on basin.  \\ \hline
+min\_lon & float & Minimum longitude for sensitivity plots.  Default:  -140.0, also set in 
+run\_NHC\_sens.py based on basin.  \\ \hline
+max\_lon & float & Maximum longitude for sensitivity plots.  Default:  -20.0, also set in
+run\_NHC\_sens.py based on basin.  \\ \hline
+grid\_interval & float & Latitude and Longitude line grid interval in degrees.
+Default:  10$^{\circ}$.  \\ \hline
+barb\_interval & integer & Number of grid points in between each wind barb in the plot.
+Default:  6 grid points  \\ \hline
+dropsonde\_file & string & Full path to file of dropsonde locations.  Default:  none \\ \hline
+drop\_mark\_size & integer &  Marker size of dropsonde locations in plot.  Default:  6 \\ \hline
+drop\_mark\_color & string & Dropsonde marker color in plot.  Default: black \\ \hline
+drop\_mark\_type & string & Dropsonde marker in plot.  Default: + \\ \hline
+rawinsonde\_file & string & Full path to file of rawinsonde locations.  Default:  none \\ \hline
+rawin\_mark\_size & integer & Marker size of rawinsonde locations in plot.  Default:  6 \\ \hline
+rawin\_mark\_color & string & Rawinsonde marker color in plot.  Default: gray \\ \hline
+range\_rings & logical & True to plot range rings from the predicted TC center.  Default: True \\ \hline
+ring\_values & floats & List of range ring radii for plot in km.  Default:  \\ \hline
+output\_sens & logical & True to create netCDF file that contains gridded sensitivity 
+fields that can be used in AWIPS or traveling salesman.  Default:  True \\ \hline
+nhc\_sens & logical & True to create NHC version of the gridded netCDF file, which means that
+it includes a variable that is the absolute value of sensitivity (for traveling salesman software).
+Default:  False \\ \hline
+\end{tabular}
+\end{center}
+\end{table}
+
+\end{document}
