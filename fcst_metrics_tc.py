@@ -1,4 +1,3 @@
-import math
 import numpy as np
 import xarray as xr
 import json
@@ -16,7 +15,6 @@ from cartopy.feature import NaturalEarthFeature
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 
 from eofs.standard import Eof
-from math import radians, pi, degrees, sin, cos, asin, acos, sqrt
 
 #####   Function to compute the great circle distance between two points
 def great_circle(lon1, lat1, lon2, lat2):
@@ -133,7 +131,7 @@ class ComputeForecastMetrics:
             vmaj = np.var(fore_met_maj)
 
             #out_stat = list(np.zeros(4))
-            #out_stat[0] = math.sqrt(vmaj) / (math.sqrt(vmin) + 0.0001)
+            #out_stat[0] = np.sqrt(vmaj) / (np.sqrt(vmin) + 0.0001)
             f_max_miss = 0.6667
             f_missing = len(np.where(fore_met_maj == 0.0)[0]) / len(fore_met_maj)
 #            if f_missing < f_max_miss or self.fhr <= 0.0:
@@ -141,10 +139,10 @@ class ComputeForecastMetrics:
 #                  f_met0 = self.forecast_maj_track_0['data_vars']["fore_met_init"]['data']
 #                mdist = np.mean(f_met0)
 #                vf_met0 = np.var(f_met0)
-#                out_stat[1] = max(math.log(math.sqrt(vmaj) / (max(math.sqrt(vf_met0), 10.0))), 1.0)
+#                out_stat[1] = max(np.log(np.sqrt(vmaj) / (max(np.sqrt(vf_met0), 10.0))), 1.0)
 
             f_met = list(np.zeros(len(fore_met_min)))
-            f_met[:] = [math.sqrt((i ** 2) + (j ** 2)) for i, j in zip(fore_met_maj, fore_met_min)]
+            f_met[:] = [np.sqrt((i ** 2) + (j ** 2)) for i, j in zip(fore_met_maj, fore_met_min)]
             self.forecast_m_dist = {'coords': {},
                           'attrs': {'FORECAST_METRIC_LEVEL': '',
                                     'FORECAST_METRIC_NAME': 'ensemble distance',
@@ -212,7 +210,7 @@ class ComputeForecastMetrics:
         for n in range(self.nens):
             if self.ens_lat[n] != self.atcf.missing and self.ens_lon[n] != self.atcf.missing:
                 fx_dir[n] = (self.ens_lon[n] - m_lon) * \
-                            self.deg2km * math.cos(math.radians(0.5 * (self.ens_lat[n] + m_lat)))
+                            self.deg2km * np.cos(np.radians(0.5 * (self.ens_lat[n] + m_lat)))
                 fy_dir[n] = (self.ens_lat[n] - m_lat) * self.deg2km
                 x_mean = x_mean + fx_dir[n]
                 y_mean = y_mean + fy_dir[n]
@@ -235,8 +233,8 @@ class ComputeForecastMetrics:
         #  Compute major and minor axis based on variance/covariance
         m_trace = x_var + y_var
         m_det = (x_var * y_var) - (xy_cov * xy_cov)
-        eval1 = max(0.5 * m_trace + math.sqrt(m_trace * m_trace / 4.0 - m_det),
-                    0.5 * m_trace - math.sqrt(m_trace * m_trace / 4.0 - m_det))
+        eval1 = max(0.5 * m_trace + np.sqrt(m_trace * m_trace / 4.0 - m_det),
+                    0.5 * m_trace - np.sqrt(m_trace * m_trace / 4.0 - m_det))
         maj_ax = [0.0, 0.0]
         min_ax = [0.0, 0.0]
         if abs(xy_cov) > 0:
@@ -245,7 +243,7 @@ class ComputeForecastMetrics:
         else:
             maj_ax[0] = 1.0
             maj_ax[1] = 0.0
-        vec_len = math.sqrt((maj_ax[0] * maj_ax[0] + maj_ax[1] * maj_ax[1]))
+        vec_len = np.sqrt((maj_ax[0] * maj_ax[0] + maj_ax[1] * maj_ax[1]))
         maj_ax[0] = maj_ax[0] / vec_len
         maj_ax[1] = maj_ax[1] / vec_len
         min_ax[0] = maj_ax[1]
@@ -344,9 +342,9 @@ class ComputeForecastMetrics:
             m_lon2 = m_lon
 
         #  Compute the along - track direction
-        x_dir = (m_lon2 - m_lon1) * self.deg2km * math.cos(0.5 * (m_lat1 + m_lat2) * self.deg2rad)
+        x_dir = (m_lon2 - m_lon1) * self.deg2km * np.cos(0.5 * np.radians(m_lat1 + m_lat2))
         y_dir = (m_lat2 - m_lat1) * self.deg2km
-        v_len = max(math.sqrt(x_dir * x_dir + y_dir * y_dir), 0.00001)
+        v_len = max(np.sqrt(x_dir * x_dir + y_dir * y_dir), 0.00001)
 
         #  Compute unit vectors in along/across directions
         alx_dir = x_dir / v_len
@@ -360,7 +358,7 @@ class ComputeForecastMetrics:
         for n in range(self.nens):
             if self.ens_lat[n] != self.atcf.missing and self.ens_lon[n] != self.atcf.missing:
                 x_dir = (self.ens_lon[n] - m_lon) \
-                        * self.deg2km * math.cos(0.5 * (self.ens_lat[n] + m_lat) * self.deg2rad)
+                        * self.deg2km * np.cos(0.5 * np.radians(self.ens_lat[n] + m_lat))
                 y_dir = (self.ens_lat[n] - m_lat) * self.deg2km
 
                 f_met_al[n] = x_dir * alx_dir + y_dir * aly_dir + rand1[n]
@@ -448,8 +446,8 @@ class ComputeForecastMetrics:
 #            vf_met0_slp = np.var(f_met0_slp)
 
 #            v_fmet_slp = np.var(f_met_slp)
-#            out_stat[2] = max((math.sqrt(v_fmet_slp) /
-#                               (max(math.sqrt(vf_met0_slp), 2.0))
+#            out_stat[2] = max((np.sqrt(v_fmet_slp) /
+#                               (max(np.sqrt(vf_met0_slp), 2.0))
 #                               ), 1.0)
         
         f_met_slp_nc = {'coords': {},
@@ -510,8 +508,8 @@ class ComputeForecastMetrics:
 #             vf_met0_kmetric = np.var(f_met0_kmetric)
 #
 #             v_fmet_kmetric = np.var(fmet_kmetric)
-#             out_stat[3] = max((math.sqrt(v_fmet_kmetric) /
-#                                (max(math.sqrt(vf_met0_kmetric), 2.0))), 1.0)
+#             out_stat[3] = max((np.sqrt(v_fmet_kmetric) /
+#                                (max(np.sqrt(vf_met0_kmetric), 2.0))), 1.0)
 
            f_met_kmetric_nc = {'coords': {},
                                'attrs': {'FORECAST_METRIC_LEVEL': '',
@@ -580,8 +578,8 @@ class ComputeForecastMetrics:
               p2 = p1 + 1
               for n in range(self.nens):
                  if lat[n] != self.atcf.missing and lon[n] != self.atcf.missing:
-                    ensvec[n,p1] = (lat[n]-m_lat_t)*self.deg2rad*self.earth_radius
-                    ensvec[n,p2] = (lon[n]-m_lon_t)*self.deg2rad*self.earth_radius*math.cos(math.radians(m_lat_t))
+                    ensvec[n,p1] = np.radians(lat[n]-m_lat_t)*self.earth_radius
+                    ensvec[n,p2] = np.radians(lon[n]-m_lon_t)*self.earth_radius*np.cos(np.radians(m_lat_t))
                  else:
                     ensvec[n,p1] = 0.0
                     ensvec[n,p2] = 0.0
@@ -621,8 +619,8 @@ class ComputeForecastMetrics:
 
            for n in range(self.nens):
               if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
-                 dy[t] = dy[t] + (ens_lat[n,t]-m_lat[t])*self.deg2rad*self.earth_radius * pc1[n]
-                 dx[t] = dx[t] + (ens_lon[n,t]-m_lon[t])*self.deg2rad*self.earth_radius*math.cos(math.radians(m_lat[t])) * pc1[n]
+                 dy[t] = dy[t] + np.radians(ens_lat[n,t]-m_lat[t])*self.earth_radius * pc1[n]
+                 dx[t] = dx[t] + np.radians(ens_lon[n,t]-m_lon[t])*self.earth_radius*np.cos(np.radians(m_lat[t])) * pc1[n]
  
            dy[t] = dy[t] / e_cnt
            dx[t] = dx[t] / e_cnt
@@ -638,16 +636,16 @@ class ComputeForecastMetrics:
            t1 = max((t-1,0))
            t2 = min((t+1,ntimes-1))
 
-           aloi = (m_lon[t2]-m_lon[t1])*self.deg2rad*self.earth_radius*math.cos(math.radians(0.5*(m_lat[t1]+m_lat[t2])))
-           aloj = (m_lat[t2]-m_lat[t1])*self.deg2rad*self.earth_radius
+           aloi = np.radians(m_lon[t2]-m_lon[t1])*self.earth_radius*np.cos(np.radians(0.5*(m_lat[t1]+m_lat[t2])))
+           aloj = np.radians(m_lat[t2]-m_lat[t1])*self.earth_radius
 
-           veclen = sqrt(aloi*aloi + aloj*aloj)
+           veclen = np.sqrt(aloi*aloi + aloj*aloj)
            aloi   = aloi / veclen
            aloj   = aloj / veclen
            acri   = aloj
            acrj   = -aloi
 
-           veclen = sqrt(dx[t]**2 + dy[t]**2)
+           veclen = np.sqrt(dx[t]**2 + dy[t]**2)
            peri   = dx[t] / veclen
            perj   = dy[t] / veclen
 
@@ -673,7 +671,7 @@ class ComputeForecastMetrics:
                jmsum = jmsum + perj
 
         #  Flip the sign of the EOF, so positive values are along and to right of track
-        veclen = sqrt(imsum*imsum + jmsum*jmsum)
+        veclen = np.sqrt(imsum*imsum + jmsum*jmsum)
         imsum  = imsum / veclen
         jmsum  = jmsum / veclen
 
@@ -693,7 +691,7 @@ class ComputeForecastMetrics:
         p_lon   = np.zeros(ntimes)
         for t in range(ntimes):
           p_lat[t] = m_lat[t] + dy[t] / (self.deg2rad*self.earth_radius)
-          p_lon[t] = m_lon[t] + dx[t] / (self.deg2rad*self.earth_radius*math.cos(math.radians(m_lat[t])))
+          p_lon[t] = m_lon[t] + dx[t] / (self.deg2rad*self.earth_radius*np.cos(np.radians(m_lat[t])))
 
 
         plot_ellipse = self.config['vitals_plot'].get('plot_ellipse',True)
@@ -794,19 +792,19 @@ class ComputeForecastMetrics:
 
             pb[0,1] = pb[1,0]
             pb[:,:] = pb[:,:] / float(e_cnt-1)
-            rho = pb[1,0] / (math.sqrt(pb[0,0]) * math.sqrt(pb[1,1]))
-            sigma_x = math.sqrt(pb[0,0])
-            sigma_y = math.sqrt(pb[1,1])
+            rho = pb[1,0] / (np.sqrt(pb[0,0]) * np.sqrt(pb[1,1]))
+            sigma_x = np.sqrt(pb[0,0])
+            sigma_y = np.sqrt(pb[1,1])
             fac = 1. / (2. * (1. - rho * rho))
             
             rdex = 0
-            for rad in range(int(math.degrees(2*math.pi))):
-              x_start = math.cos(math.radians(rad))
-              y_start = math.sin(math.radians(rad))
+            for rad in range(int(np.degrees(2*np.pi))):
+              x_start = np.cos(np.radians(rad))
+              y_start = np.sin(np.radians(rad))
               for r_distance in range(2400):
                 x_loc = x_start * r_distance / 80.0
                 y_loc = y_start * r_distance / 80.0
-                prob = math.exp(-1.0 * fac * ((x_loc / sigma_x) ** 2 + (y_loc / sigma_y) ** 2 -
+                prob = np.exp(-1.0 * fac * ((x_loc / sigma_x) ** 2 + (y_loc / sigma_y) ** 2 -
                                   2.0 * rho * (x_loc / sigma_x) * (y_loc / sigma_y)))
                 if prob < 0.256:
                   x_ell[rdex] = x_loc + m_lon[t]
