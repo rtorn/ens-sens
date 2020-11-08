@@ -16,7 +16,7 @@ from cartopy.feature import NaturalEarthFeature
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 
 from eofs.standard import Eof
-from math import radians, degrees, sin, cos, asin, acos, sqrt
+from math import radians, pi, degrees, sin, cos, asin, acos, sqrt
 
 #####   Function to compute the great circle distance between two points
 def great_circle(lon1, lat1, lon2, lat2):
@@ -27,12 +27,20 @@ def great_circle(lon1, lat1, lon2, lat2):
     Attributes
         lon1 (float): longitude of first point
         lat1 (float): latitude of first point
-        lon2 (float): longitude of second point
-        lat2 (float): latitude of second point
+        lon2 (float): longitude of second point.  Can be an array
+        lat2 (float): latitude of second point.  Can be an array
     '''
 
-    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-    return 6371. * acos(np.minimum(sin(lat1) * sin(lat2) + cos(lat1) * cos(lat2) * cos(lon1 - lon2),1.0))
+    dist = np.empty(lon2.shape)
+
+    lon1 = np.radians(lon1)
+    lat1 = np.radians(lat1) 
+    lon2[:] = np.radians(lon2[:])
+    lat2[:] = np.radians(lat2[:]) 
+
+    dist[:] = np.sin(lat1) * np.sin(lat2[:]) + np.cos(lat1) * np.cos(lat2[:]) * np.cos(lon1 - lon2[:])
+
+    return 6371. * np.arccos(np.minimum(dist,1.0))
 
 
 class ComputeForecastMetrics:
@@ -54,7 +62,8 @@ class ComputeForecastMetrics:
         self.deg2rad = 0.01745
         self.earth_radius = 6378388.
         self.missing = -9999.
-        self.deg2km = self.earth_radius * math.radians(1)
+        self.deg2km = self.earth_radius * np.radians(1)
+
         self.nens = int(len(atcf.atcf_files))
         fhr_list = json.loads(config['metric']['metric_hours'])
         self.datea_str = datea
@@ -482,17 +491,17 @@ class ComputeForecastMetrics:
 
               lonarr, latarr = np.meshgrid(ul.longitude.values, ul.latitude.values)
 
-              #  Compute the average KE within the specified radius
-              aresum = 0.0
-              for j in range(nlat):
-                awght = np.sqrt(np.cos(math.radians(ul.latitude.values[j])))
-                for i in range(nlon):
-                  dist = great_circle(ul.latitude.values[j],ul.longitude.values[i],lat_vec[n],lon_vec[n])
-                  if dist <= ke_radius:
-                    fmet_kmetric[n] = fmet_kmetric[n] + awght * 0.5 * (ul[j,i]**2 + vl[j,i]**2)                   
-                    aresum = aresum + awght
+              dist = great_circle(lon_vec[n], lat_vec[n], lonarr, latarr)
 
-              fmet_kmetric[n] = fmet_kmetric[n] / aresum 
+              #  Compute lat/lon weights, replace with zeros where greater than radius
+              awght = np.zeros(dist.shape)
+              for j in range(nlat):
+                awght[j,:] = np.cos(np.radians(ul.latitude.values[j]))
+
+              awght = np.where(dist <= ke_radius, awght, 0.) 
+ 
+              #  Compute the kinetic energy
+              fmet_kmetric[n] = 0.5 * np.sum(awght[:,:] * (ul[:,:]**2 + vl[:,:]**2)) / np.sum(awght)
 
 #           if self.fhr > 0.0:
 #
