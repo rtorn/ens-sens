@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import xarray as xr
 import json
@@ -15,6 +16,7 @@ from cartopy.feature import NaturalEarthFeature
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 
 from eofs.standard import Eof
+from eofs.xarray import Eof as Eof_xarray
 
 #####   Function to compute the great circle distance between two points
 def great_circle(lon1, lat1, lon2, lat2):
@@ -53,7 +55,7 @@ class ComputeForecastMetrics:
         config (dict.):  dictionary that contains configuration options (read from file)
     '''
 
-    def __init__(self, datea, atcf, config):
+    def __init__(self, datea, storm, atcf, config):
 
         #  Define class-specific variables
         self.fhr = None
@@ -68,6 +70,7 @@ class ComputeForecastMetrics:
         self.datea = dt.datetime.strptime(datea, '%Y%m%d%H')
         self.datea_s = self.datea.strftime("%m%d%H%M")
         self.outdir = config['output_dir']
+        self.storm  = storm
 
         self.dpp = importlib.import_module(config['io_module'])
 
@@ -174,6 +177,10 @@ class ComputeForecastMetrics:
 
         #  Compute integrated intensity EOF metric
         self.__intensity_eof()
+
+        #  Compute precipitation EOF metric
+        if self.config['metric'].get('precipitation_eof_metric', 'False') == 'True':
+           self.__precipitation_eof()
 
 
     def __f_metric_tc_el_track(self):
@@ -1010,6 +1017,144 @@ class ComputeForecastMetrics:
 
         xr.Dataset.from_dict(f_met_inteneof_nc).to_netcdf(
             self.outdir + "/{1}_f{0}_intmslp.nc".format(self.config['metric'].get('intensity_eof_hour_final',120), str(self.datea_str)), encoding={'fore_met_init': {'dtype': 'float32'}})
+
+
+    def __precipitation_eof(self):
+        '''
+        Function that computes precipitation EOF metric, which is calculated by taking the EOF of 
+        the ensemble precipitation forecast over a domain defined by the user in a text file.  
+        The resulting forecast metric is the principal component of the
+        EOF.  The function also plots a figure showing the ensemble-mean precipitation pattern 
+        along with the precipitation perturbation that is consistent with the first EOF. 
+        '''
+
+        try:
+           f = open(self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm), 'r')
+        except IOError:
+           print(self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm) + " does not exist.  Cannot compute precip EOF")
+           return 0
+
+        #  Read the text file that contains information on the precipitation metric
+        fhr1 = int(f.readline())
+        fhr2 = int(f.readline())
+        lat1 = float(f.readline())
+        lon1 = float(f.readline())
+        lat2 = float(f.readline())
+        lon2 = float(f.readline())
+
+        f.close()
+
+        #  Read the total precipitation for the beginning of the window
+        g1 = self.dpp.ReadGribFiles(self.datea_str, fhr1, self.config)
+
+        vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2),
+                 'description': 'precipitation', 'units': 'mm', '_FillValue': -9999.}
+        vDict = g1.set_var_bounds('precipitation', vDict)
+        ensmati = g1.create_ens_array('precipitation', self.nens, vDict)
+
+        for n in range(self.nens):
+           ensmati[n,:,:] = np.squeeze(g1.read_grib_field('precipitation', n, vDict))
+
+        #  Read the precipitation for the end of the window
+        g1 = self.dpp.ReadGribFiles(self.datea_str, fhr2, self.config)
+
+        ensmat = g1.create_ens_array('precipitation', self.nens, vDict)
+
+        for n in range(self.nens):
+           eout = g1.read_grib_field('precipitation', n, vDict).squeeze()
+           ensmat[n,:,:] = eout[:,:]
+
+        if eout.units == "m":
+           vscale = 1000.
+        else:
+           vscale = 1.
+
+        #  Scale all of the rainfall to mm and to a 24 h precipitation
+        ensmat[:,:,:] = (ensmat[:,:,:] - ensmati[:,:,:]) * vscale * 24. / float(fhr2-fhr1)
+
+        e_mean = np.mean(ensmat, axis=0)
+        ensmat = ensmat - e_mean
+
+        #  Compute the EOF of the precipitation pattern and then the PCs
+        coslat = np.cos(np.deg2rad(ensmat.latitude.values)).clip(0., 1.)
+        wgts = np.sqrt(coslat)[..., np.newaxis]
+
+        solver = Eof_xarray(ensmat.rename({'ensemble': 'time'}), weights=wgts)
+        pc1    = np.squeeze(solver.pcs(npcs=1, pcscaling=1))
+
+        pc1[:] = pc1[:] / np.std(pc1)
+
+        #  Compute the precipitation pattern associated with a 1 PC perturbation
+        dpcp = np.zeros(e_mean.shape)
+
+        for n in range(self.nens):
+          dpcp[:,:] = dpcp[:,:] + ensmat[n,:,:] * pc1[n]
+
+        dpcp[:,:] = dpcp[:,:] / float(self.nens)
+
+        gridInt = 5
+
+        #  Create basic figure, including political boundaries and grid lines
+        fig = plt.figure(figsize=(11,8.5))
+
+        colorlist = ("#FFFFFF", "#00ECEC", "#01A0F6", "#00BFFF", "#00FF00", "#00C800", "#009000", "#FFFF00", \
+                     "#E7C000", "#FF9000", "#FF0000", "#D60000", "#C00000", "#FF00FF", "#9955C9")
+
+        ax = plt.axes(projection=ccrs.PlateCarree())
+        states = NaturalEarthFeature(category="cultural", scale="50m",
+                                     facecolor="none",
+                                     name="admin_1_states_provinces_shp")
+        ax.add_feature(states, linewidth=0.5, edgecolor="black")
+        ax.coastlines('50m', linewidth=1.0)
+        ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
+        ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
+
+        gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
+                          linewidth=1, color='gray', alpha=0.5, linestyle='-')
+        gl.top_labels = None
+        gl.left_labels = None
+        gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lon1),10.*np.ceil(0.1*lon2)+1.,gridInt))
+        gl.xformatter = LONGITUDE_FORMATTER
+        gl.xlabel_style = {'size': 12, 'color': 'gray'}
+        gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lat1),10.*np.ceil(0.1*lat2)+1.,gridInt))
+        gl.yformatter = LATITUDE_FORMATTER
+        gl.ylabel_style = {'size': 12, 'color': 'gray'}
+
+        ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
+
+        mpcp = [0.0, 0.25, 0.50, 1., 1.5, 2., 4., 6., 8., 12., 16., 24., 32., 64., 96., 97.]
+        norm = matplotlib.colors.BoundaryNorm(mpcp,len(mpcp))
+        pltf = plt.contourf(ensmat.longitude.values,ensmat.latitude.values,e_mean,mpcp, \
+                             cmap=matplotlib.colors.ListedColormap(colorlist), norm=norm, extend='max')
+        
+        pcpfac = np.ceil(np.max(dpcp) / 5.0)
+        cntrs = np.array([-5., -4., -3., -2., -1., 1., 2., 3., 4., 5]) * pcpfac
+        pltm = plt.contour(ensmat.longitude.values,ensmat.latitude.values,dpcp,cntrs,linewidths=1.5, colors='k', zorder=10)
+
+        #  Add colorbar to the plot
+        cbar = plt.colorbar(pltf, fraction=0.15, aspect=45., pad=0.04, orientation='horizontal', ticks=mpcp)
+        cbar.set_ticks(mpcp[1:(len(mpcp)-1)])
+        cb = plt.clabel(pltm, inline_spacing=0.0, fontsize=12, fmt="%1.0f")
+
+        fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
+        plt.title("{0} {1}-{2} hour Precipitation, {3} of variance".format(str(self.datea_str),fhr1,fhr2,fracvar))
+
+        plt.savefig("{}/TC_precip_eof.png".format(self.config['work_dir']),format='png',dpi=120,bbox_inches='tight')
+        plt.close(fig)
+
+        f_met_pcpeof_nc = {'coords': {},
+                           'attrs': {'FORECAST_METRIC_LEVEL': '',
+                                     'FORECAST_METRIC_NAME': 'precipitation PC',
+                                     'FORECAST_METRIC_SHORT_NAME': 'pcpeof'},
+                             'dims': {'num_ens': self.nens},
+                             'data_vars': {'fore_met_init': {'dims': ('num_ens',),
+                                                            'attrs': {'units': '',
+                                                                      'description': 'precipitation PC'},
+                                                            'data': pc1}}}
+
+        xr.Dataset.from_dict(f_met_pcpeof_nc).to_netcdf(
+            self.outdir + "/{1}_f{0}_intmslp.nc".format(fhr2, str(self.datea_str)), encoding={'fore_met_init': {'dtype': 'float32'}})
+
 
 
 if __name__ == "__main__":

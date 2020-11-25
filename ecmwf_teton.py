@@ -154,7 +154,8 @@ class ReadGribFiles:
                          'geopotential_height': 'gh', \
                          'temperature': 't',          \
                          'relative_humidity': 'r',    \
-                         'sea_level_pressure': 'msl'}
+                         'sea_level_pressure': 'msl', \
+                         'precipitation': 'tp'}
 
 
     def set_var_bounds(self, varname, vdict):
