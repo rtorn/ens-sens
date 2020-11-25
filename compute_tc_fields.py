@@ -1,4 +1,5 @@
 import os
+import logging
 import importlib
 import math
 import netCDF4 as nc
@@ -56,7 +57,7 @@ class ComputeTCFields:
 
         self.dpp = importlib.import_module(config['io_module'])
 
-        print("Computing hour " + self.fff + " ensemble fields")
+        logging.warning("Computing hour {0} ensemble fields".format(self.fff))
 
         #  Obtain the ensemble lat/lon information, replace missing values with mean
         self.ens_lat, self.ens_lon = atcf.ens_lat_lon_time(self.fhr)
@@ -88,7 +89,7 @@ class ComputeTCFields:
         voutfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_vsteer_ens.nc'
         if (not os.path.isfile(uoutfile) or not os.path.isfile(voutfile)) and config['fields'].get('calc_uvsteer','True') == 'True':
 
-          print("  Computing steering wind information")
+          logging.warning("  Computing steering wind information")
 
           inpDict = {'isobaricInhPa': (steerp1, steerp2)}
           inpDict = g1.set_var_bounds('zonal_wind', inpDict)
@@ -167,13 +168,13 @@ class ComputeTCFields:
 
         else:
 
-          print("  Obtaining steering wind information from file")
+          logging.warning("  Obtaining steering wind information from file")
 
         #  Read 500 hPa geopotential height from file, if ensemble file is not present
         outfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_h500_ens.nc'
         if (not os.path.isfile(outfile) and config['fields'].get('calc_h500hPa','True') == 'True'):
 
-          print("  Computing 500 hPa height")
+          logging.warning("  Computing 500 hPa height")
 
           vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (500, 500), 
                    'description': '500 hPa height', 'units': 'm', '_FillValue': -9999.}
@@ -185,15 +186,15 @@ class ComputeTCFields:
 
           ensmat.to_netcdf(outfile, encoding=dencode)
 
-        else:
+        elif os.path.isfile(outfile):
 
-          print("  Obtaining 500 hPa height data from " + outfile)
+          logging.warning("  Obtaining 500 hPa height data from {0}".format(outfile))
 
         #  Compute 250 hPa PV if the file does not exist
         outfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_pv250_ens.nc'
         if (not os.path.isfile(outfile) and config['fields'].get('calc_pv250hPa','True') == 'True'):
 
-          print("  Computing 250 hPa PV")
+          logging.warning("  Computing 250 hPa PV")
 
           vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (200, 300),
                    'description': '250 hPa Potential Vorticity', 'units': 'PVU', '_FillValue': -9999.}
@@ -229,13 +230,13 @@ class ComputeTCFields:
 
         elif os.path.isfile(outfile):
 
-          print("  Obtaining 250 hPa PV data from " + outfile)
+          logging.warning("  Obtaining 250 hPa PV data from {0}".format(outfile))
 
         #  Compute the 700 hPa equivalent potential temperature (if desired and file is missing)
         outfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_e700_ens.nc'
         if (not os.path.isfile(outfile) and config['fields'].get('calc_the700hPa','False') == 'True'):
 
-          print("  Computing 700 hPa Theta-E")
+          logging.warning("  Computing 700 hPa Theta-E")
 
           vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (700, 700),
                    'description': '700 hPa Equivalent Potential Temperature', 'units': 'K', '_FillValue': -9999.}
@@ -258,15 +259,15 @@ class ComputeTCFields:
 
           ensmat.to_netcdf(outfile, encoding=dencode)
 
-        else:
+        elif os.path.isfile(outfile):
 
-          print("  Obtaining 700 hPa Theta-e data from " + outfile)
+          logging.warning("  Obtaining 700 hPa Theta-e data from {0}".format(outfile))
 
         #  Compute the 500-850 hPa water vapor mixing ratio (if desired and file is missing)
         outfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_q500-850_ens.nc'
         if (not os.path.isfile(outfile) and config['fields'].get('calc_q500-850hPa','False') == 'True'):
 
-          print("  Computing 500-850 hPa Water Vapor")
+          logging.warning("  Computing 500-850 hPa Water Vapor")
 
           vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2),
                    'description': '500-850 hPa Integrated Water Vapor', 'units': 'hPa', '_FillValue': -9999.}
@@ -299,9 +300,9 @@ class ComputeTCFields:
 
           ensmat.to_netcdf(outfile, encoding=dencode)
 
-        else:
+        elif os.path.isfile(outfile):
 
-          print("  Obtaining 500-850 hPa water vapor data from " + outfile)
+          logging.warning("  Obtaining 500-850 hPa water vapor data from {0}".format(outfile))
 
 
 if __name__ == "__main__":

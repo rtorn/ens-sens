@@ -7,6 +7,7 @@ import shutil
 import tarfile
 import numpy as np
 import configparser
+import logging
 import atcf_tools as atools
 import trop_cyclone as tc
 import fcst_metrics_tc as fmtc
@@ -122,7 +123,9 @@ def main():
        bbl = "wp"
 
     bbnnyyyy = "{0}{1}{2}".format(bbl, storm[-3:-1], datea[0:4])
-    print("STARTING SENSITIVITIES for {0} on {1}".format(bbnnyyyy, str(datea)))
+    logging.basicConfig(filename='{0}/{1}_{2}.log'.format(config.get('log_dir','.'),str(datea),storm), \
+                               filemode='w', format='%(message)s')
+    logging.warning("STARTING SENSITIVITIES for {0} on {1}".format(bbnnyyyy, str(datea)))
 
 
     #  Create directories to put output graphics 
@@ -150,7 +153,7 @@ def main():
 
 
     #  Compute TC-related forecast metrics
-    fmtc.ComputeForecastMetrics(datea, atcf, config)
+    fmtc.ComputeForecastMetrics(datea, storm, atcf, config)
 
 
     #  Compute forecast fields at each desired time to use in sensitivity calculation

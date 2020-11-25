@@ -1,4 +1,5 @@
 import os
+import logging
 import sys
 import netCDF4 as nc
 import numpy as np
@@ -34,7 +35,7 @@ class ComputeSensitivity:
 
       fhrt = '%0.3i' % fhr
 
-      print('Sensitivity of ' + metname + ' to F' + fhrt)
+      logging.warning('Sensitivity of {0} to F{1}'.format(metname,fhrt))
 
       if config['storm'][-1] == "l":
         bbnn = "al" + config['storm'][-3:-1]

@@ -318,6 +318,4 @@ if __name__ == '__main__':
     # if c1.checkandcreatedir():
     #     c1.copy_filestowork()
     g1 = ReadGribFiles(grib_src, '2019082900', 180)
-    print(g1.grib_dict)
     a1 = Readatcfdata(atcf_src)
-    print(a1.atcf_array)

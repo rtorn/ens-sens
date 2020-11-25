@@ -4,6 +4,7 @@ import xarray as xr
 import json
 import numpy as np
 import datetime as dt
+import logging
 
 import matplotlib
 from IPython.core.pylabtools import figsize, getfigs
@@ -79,7 +80,7 @@ class ComputeForecastMetrics:
         for self.fhr in fhr_list:
 
             self.fff = str(self.fhr + 1000)[1:]
-            print('  Computing Forecast Metrics for F' + self.fff)
+            logging.warning('  Computing Forecast Metrics for F{0}'.format(self.fff))
 
             #  Obtain the TC latitude/longitude during, before and after time
             self.ens_lat,  self.ens_lon  = self.atcf.ens_lat_lon_time(self.fhr)
@@ -477,7 +478,7 @@ class ComputeForecastMetrics:
            ke_radius = self.config['metric'].get('kinetic_energy_radius',200.)
            ke_level  = self.config['metric'].get('kinetic_energy_level',1000.)
 
-           print('    Computing ' + str(ke_level) + ' hPa Kinetic Energy')
+           logging.warning('    Computing {0} hPa Kinetic Energy'.format(str(ke_level)))
 
            fmet_kmetric = np.zeros(self.nens)
 
@@ -542,7 +543,7 @@ class ComputeForecastMetrics:
         track perturbation that is consistent with the first EOF. 
         '''
 
-        print('  Computing time-integrated track metric')
+        logging.warning('  Computing time-integrated track metric')
 
         halfens = int(0.5*float(self.nens))
 
@@ -853,7 +854,7 @@ class ComputeForecastMetrics:
         min. SLP and max. wind perturbation that is consistent with the first EOF. 
         '''
 
-        print('  Computing time-integrated intensity metric')
+        logging.warning('  Computing time-integrated intensity metric')
 
         halfens = int(0.5*float(self.nens))
 
@@ -1031,7 +1032,7 @@ class ComputeForecastMetrics:
         try:
            f = open(self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm), 'r')
         except IOError:
-           print(self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm) + " does not exist.  Cannot compute precip EOF")
+           logging.warning(self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm) + " does not exist.  Cannot compute precip EOF")
            return 0
 
         #  Read the text file that contains information on the precipitation metric

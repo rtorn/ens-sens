@@ -109,7 +109,6 @@ def plot_ens_tc_track(atcf, bvital, storm, datea, config):
 
     # Plot best track position if desired (needs updating)
     for i in range(d):
-        # print(bvital.get_value([i, 6]))
         if bvital.get_value([i, 6]) == math.inf:
             bcnt = bcnt + 1
     btype = bvital.get_value([0, 6])
@@ -384,7 +383,6 @@ def atcf_ens_tc_vitals(atcf, best_file, datea, storm, fstid, bestmax, config, ou
 
     #  This code is old and will likely be removed in future versions once the proper best track reading and query code is in atcf_tools.py
     if bestfile is not None:
-        # print(1)
         # with open(bestfile, 'r') as fo:
         best_data = bestfile
         total_rows = best_data.shape[0]
@@ -400,7 +398,6 @@ def atcf_ens_tc_vitals(atcf, best_file, datea, storm, fstid, bestmax, config, ou
                     bcnt = bcnt + 1
                     for n in range(4):
                         b34wrad.get(bcnt)[n] == 0.0
-                # print(fhr)
                 bvital.set_value([bcnt, 0], float(best_data[i][35:38]) * 0.1)
                 if str(best_data[i][45]) == "W":
                     bvital.set_value([bcnt, 1], -float(best_data[i][41:45]) * 0.1)
@@ -409,7 +406,6 @@ def atcf_ens_tc_vitals(atcf, best_file, datea, storm, fstid, bestmax, config, ou
                 bvital.set_value([bcnt, 2], float(best_data[i][53:57]))
                 bvital.set_value([bcnt, 3], float(best_data[i][48:51]))
                 bvital.set_value([bcnt, 4], fhr)
-                # print(fhr)
                 bvital.set_value([bcnt, 5], float(best_data[i][16:18]))
                 if (tctype == "TD") or (tctype == "SD") or (tctype == "TS") or (
                         tctype == "SS") or (tctype == "HU") or (tctype == "TY") or (tctype == "ST"):
