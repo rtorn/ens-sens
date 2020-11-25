@@ -113,7 +113,10 @@ class ReadGribFiles:
 #        nn = '%0.2i' % member
 #        return self.src_path + '/gefs' + self.datea_str[0:8] + '/ge' + modid + nn + '_' + self.datea_str[8:10] + 'z_pgrb2a'
         file_name = config['model_dir'] + '/gefs' + datea[0:8] + '/gefs_pgrb2ap5_all_' + datea[8:10] + 'z'
-        self.ds_dict = xr.open_dataset(file_name)
+        try:  
+           self.ds_dict = xr.open_dataset(file_name)
+        except IOError as exc:
+           raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
 
         #  Put longitude into -180 to 180 format
         self.ds_dict.coords['lon'] = (self.ds_dict.coords['lon'] + 180) % 360 - 180

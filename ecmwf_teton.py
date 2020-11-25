@@ -135,7 +135,7 @@ class ReadGribFiles:
 
         #  Construct the grib file dictionary for a particular forecast hour
         file_name = os.path.join(config['work_dir'], "E1E{0}{1}1".format(str(init_s), str(datef_s)))
-        if os.path.isfile(file_name):
+        try:  
            ds = cfgrib.open_datasets(file_name)
            self.grib_dict = {}
            for d in ds:
@@ -145,9 +145,9 @@ class ReadGribFiles:
                  else:
                     self.grib_dict.update({'{0}_cf'.format(tt): d[tt]})
 
-        else:
-           exit(2)
-
+        except IOError as exc:
+           raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
+                 
         #  This is a dictionary that maps from generic variable names to the name of variable in file
         self.var_dict = {'zonal_wind': 'u',           \
                          'meridional_wind': 'v',      \
