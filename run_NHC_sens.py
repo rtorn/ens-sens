@@ -40,8 +40,8 @@ def read_config(datea, storm, filename):
     config.update(confin['locations'])
 
     #  Modify work and output directory for specific case/time
-    config['work_dir']   = config['work_dir']   + "/" + datea + "." + storm
-    config['output_dir'] = config['output_dir'] + "/" + datea + "." + storm
+    config['work_dir']   = '{0}/{1}.{2}'.format(config['work_dir'],datea,storm)
+    config['output_dir'] = '{0}/{1}.{2}'.format(config['output_dir'],datea,storm)
     config['storm']      = storm
 
     #  Create appropriate directories
@@ -130,11 +130,11 @@ def main():
 
     #  Create directories to put output graphics 
     if ( config.get('webpage','True') == 'True' ):
-       if not os.path.isdir(config['html_dir'] + '/' + datea + "." + storm):
-          os.makedirs(config['html_dir'] + '/' + datea + "." + storm)
-       if not os.path.islink(config['work_dir'] + '/' + datea + "." + storm):
-          os.symlink(config['html_dir'] + '/' + datea + '.' + storm, config['work_dir'] + '/' + datea + "." + storm)
-
+       if not os.path.isdir('{0}/{1}.{2}'.format(config['html_dir'],datea,storm)):
+          os.makedirs('{0}/{1}.{2}'.format(config['html_dir'],datea,storm))
+       if not os.path.islink('{0}/{1}.{2}'.format(config['work_dir'],datea,storm)):
+          os.symlink('{0}/{1}.{2}'.format(config['html_dir'],datea,storm), \
+                     '{0}/{1}.{2}'.format(config['work_dir'],datea,storm))
     
     #  Copy grib and ATCF data to the work directory
     dpp.stage_grib_files(datea, config)
@@ -142,13 +142,13 @@ def main():
 
 
     #  Read ATCF data into dictionary
-    atcf = atools.ReadATCFData(config['work_dir']+"/atcf_*.dat")
+    atcf = atools.ReadATCFData('{0}/atcf_*.dat'.format(config['work_dir']))
     btk = atcf.get_best_data(bbnnyyyy)
 
 
     #  Plot the ensemble forecast
-    config['vitals_plot']['track_output_dir'] = config['vitals_plot'].get('track_output_dir', config['work_dir'] + "/" + str(datea) + '.' + storm)
-    config['vitals_plot']['int_output_dir'] = config['vitals_plot'].get('int_output_dir', config['work_dir'] + "/" + str(datea) + '.' + storm)
+    config['vitals_plot']['track_output_dir'] = config['vitals_plot'].get('track_output_dir', '{0}/{1}.{2}'.format(config['work_dir'],str(datea),storm))
+    config['vitals_plot']['int_output_dir'] = config['vitals_plot'].get('int_output_dir', '{0}/{1}.{2}'.format(config['work_dir'],str(datea),storm))
     tc.atcf_ens_tc_vitals(atcf, btk, datea, storm, config['model_src'], 50, config['vitals_plot'], config['work_dir'])
 
 
@@ -182,24 +182,24 @@ def main():
        print("Add capability")
 
     if ( config.get('archive_fields','False') == 'True' ):
-       os.rename(config['work_dir'] + '/\*_ens.nc', config['output_dir'] + '/.')
+       os.rename('{0}/\*_ens.nc'.format(config['work_dir']), '{0}/.'.format(config['output_dir']))
 
 
     #  Create a tar file of gridded sensitivity files, if needed
     os.chdir(config['work_dir'])
 
-    tarout = config['outgrid_dir'] + '/' + datea + '.tar'
+    tarout = '{0}/{1}.tar'.format(config['outgrid_dir'],datea) 
     if ( os.path.isfile(tarout) and tarfile.is_tarfile(tarout) ):
        tar = tarfile.open(tarout) 
        tar.extractall()
        tar.close()
 
     for f in ['usteer', 'vsteer', 'masteer', 'misteer']:
-       for g in glob.glob(config['work_dir'] + "/" + datea + '.' + storm + '/*_intmajtrack/sens/' + f + '/*.nc'): 
-          shutil.copy(g, datea + "/" + bbl + storm[-3:-1] + "/.")
+       for g in glob.glob('{0}/{1}.{2}/*_intmajtrack/sens/{3}/*.nc'.format(config['work_dir'],datea,storm,f)): 
+          shutil.copy(g, '{0}/{1}{2}/.'.format(datea,bbl,storm[-3:-1]))
 
     tar = tarfile.open(tarout, 'w')
-    for f in glob.glob(datea + '/*/*.nc'):
+    for f in glob.glob('{0}/*/*.nc'.format(datea)):
        tar.add(f)
     tar.close()
 

@@ -50,12 +50,12 @@ def stage_atcf_files(datea, bbnnyyyy, config):
         config     (dict):  The dictionary with configuration information
     '''
 
-    src  = config['atcf_dir'] + "/a" + bbnnyyyy + ".dat.gz"
+    src  = '{0}/a{1}.dat.gz'.format(config['atcf_dir'],bbnnyyyy)
     nens = int(config['num_ens'])
 
     #  Unzip the file from the NHC server, write the file to the work directory
     gzfile = gzip.GzipFile(fileobj=urllib.request.urlopen(src))
-    uzfile = open(config['work_dir'] + '/a' + bbnnyyyy + '.dat', 'wb')
+    uzfile = open('{0}/a{1}.dat'.format(config['work_dir'],bbnnyyyy), 'wb')
     uzfile.write(gzfile.read())        
     gzfile.close()
     uzfile.close()
@@ -76,13 +76,13 @@ def stage_atcf_files(datea, bbnnyyyy, config):
           modid = 'AC'
 
        nn = '%0.2i' % n
-       file_name = config['work_dir'] + "/atcf_" + nn + ".dat"
+       file_name = '{0}/atcf_{1}.dat'.format(config['work_dir'],nn)
 
        #  If the specific member's ATCF file does not exist, copy from the source file with sed.
        if not os.path.isfile(file_name):
 
           fo = open(file_name,"w")
-          fo.write(os.popen("sed -ne /" + datea + "/p " + config['work_dir'] + "/a" + bbnnyyyy + ".dat | sed -ne /" + modid + nn + "/p").read())
+          fo.write(os.popen('sed -ne /{0}/p {1}/a{2}.dat | sed -ne /{3}{4}/p'.format(datea,config['work_dir'],bbnnyyyy,modid,nn)).read())
           fo.close()
 
  
@@ -111,8 +111,8 @@ class ReadGribFiles:
 #        else:
 #            modid = 'c'
 #        nn = '%0.2i' % member
-#        return self.src_path + '/gefs' + self.datea_str[0:8] + '/ge' + modid + nn + '_' + self.datea_str[8:10] + 'z_pgrb2a'
-        file_name = config['model_dir'] + '/gefs' + datea[0:8] + '/gefs_pgrb2ap5_all_' + datea[8:10] + 'z'
+#        return '{0}/gefs{1}/ge{2}{3}_{4}z_pgrb2a'.format(self.src_path,self.datea_str[0:8],modid,nn,self.datea_str[8:10])
+        file_name = '{0}/gefs{1}/gefs_pgrb2ap5_all_{2}z'.format(config['model_dir'],datea[0:8],datea[8:10])
         try:  
            self.ds_dict = xr.open_dataset(file_name)
         except IOError as exc:

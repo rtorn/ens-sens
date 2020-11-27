@@ -38,11 +38,11 @@ class ComputeSensitivity:
       logging.warning('Sensitivity of {0} to F{1}'.format(metname,fhrt))
 
       if config['storm'][-1] == "l":
-        bbnn = "al" + config['storm'][-3:-1]
+        bbnn = 'al{0}'.format(config['storm'][-3:-1])
       elif config['storm'][-1] == "e":
-        bbnn = "ep" + config['storm'][-3:-1]
+        bbnn = 'ep{0}'.format(config['storm'][-3:-1])
       elif storm[-1] == "w":
-        bbnn = "wp" + config['storm'][-3:-1]
+        bbnn = 'wp{0}'.format(config['storm'][-3:-1])
 
       #  Compute the ensemble-mean lat/lon for plotting
       elat, elon = atcf.ens_lat_lon_time(fhr)
@@ -58,12 +58,16 @@ class ComputeSensitivity:
 
       plotDict['tcLat']     = m_lat / e_cnt
       plotDict['tcLon']     = m_lon / e_cnt
-      plotDict['plotTitle'] = datea + " F" + fhrt
-      plotDict['fileTitle'] = "TEST JHT-Torn ECMWF Sensitivity"
-      plotDict['initDate']  = datea[0:4] + "-" + datea[4:6] + "-" + datea[6:8] + " " + datea[8:10] + ":00:00"
+      plotDict['plotTitle'] = '{0} F{1}'.format(datea,fhrt)
+      plotDict['fileTitle'] = 'TEST JHT-Torn ECMWF Sensitivity'
+      plotDict['initDate']  = '{0}-{1}-{2} {3}:00:00'.format(datea[0:4],datea[4:6],datea[6:8],datea[8:10])
 
       #  Obtain the metric information (here read from file)
-      mfile = nc.Dataset(config['output_dir'] + '/' + datea + '_' + metname + '.nc')
+      try:
+         mfile = nc.Dataset('{0}/{1}_{2}.nc'.format(config['output_dir'],datea,metname))
+      except IOError:
+         logging.error('{0}/{1}_{2}.nc does not exist'.format(config['output_dir'],datea,metname))
+         return
 
       metric = mfile.variables['fore_met_init'][:]
       nens   = len(metric)
@@ -95,7 +99,7 @@ class ComputeSensitivity:
       stceDict["figsize"]=(8.5,11)
 
       #  Read the ensemble zonal and meridional steering wind, compute ensemble mean
-      ufile = nc.Dataset(config['work_dir'] + "/" + datea + "_f" + fhrt + "_usteer_ens.nc")
+      ufile = nc.Dataset('{0}/{1}_f{2}_usteer_ens.nc'.format(config['work_dir'],datea,fhrt))
       uVar = ufile.variables
 
       lat  = uVar['latitude'][:]
@@ -104,7 +108,7 @@ class ComputeSensitivity:
       umea = np.mean(uens, axis=0)
       uvar = np.var(uens, axis=0)
 
-      vfile = nc.Dataset(config['work_dir'] + "/" + datea + "_f" + fhrt + "_vsteer_ens.nc")
+      vfile = nc.Dataset('{0}/{1}_f{2}_vsteer_ens.nc'.format(config['work_dir'],datea,fhrt))
       vVar = vfile.variables
 
       vens = np.squeeze(vVar['ensemble_data'][:])
@@ -116,30 +120,30 @@ class ComputeSensitivity:
       sens, sigv = computeSens(uens, uvar, metric)
       sens[:,:] = sens[:,:] * np.sqrt(uvar[:,:])
 
-      outdir = config['work_dir'] + "/" + datea + '.' + config['storm'] + '/' + metname + '/sens/usteer'
+      outdir = '{0}/{1}.{2}/{3}/sens/usteer'.format(config['work_dir'],datea,config['storm'],metname)
       if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
       if plotDict.get('output_sens', False):
-        if not os.path.isdir(datea + '/' + bbnn):
-          os.makedirs(datea + '/' + bbnn)
-        writeSensFile(lat, lon, fhr, umea, sens, sigv, datea + '/' + bbnn + '/' + datea + "_f" + fhrt + "_usteer_sens.nc", plotDict)
+        if not os.path.isdir('{0}/{1}'.format(datea,bbnn)):
+          os.makedirs('{0}/{1}'.format(datea,bbnn))
+        writeSensFile(lat, lon, fhr, umea, sens, sigv, '{0}/{1}/{0}_f{2}_usteer_sens.nc'.format(datea,bbnn,fhrt), plotDict)
 
-      plotVecSens(lat, lon, sens, umea, vmea, sigv, outdir + '/' + datea + "_f" + fhrt + "_usteer_sens.png", plotDict)
+      plotVecSens(lat, lon, sens, umea, vmea, sigv, '{0}/{1}_f{2}_usteer_sens.png'.format(outdir,datea,fhrt), plotDict)
 
 
       #  Compute sensitivity with respect to meridional steering wind
       sens, sigv = computeSens(vens, vvar, metric)
       sens[:,:] = sens[:,:] * np.sqrt(vvar[:,:])
 
-      outdir = config['work_dir'] + "/" + datea + '.' + config['storm'] + '/' + metname + '/sens/vsteer'
+      outdir = '{0}/{1}.{2}/{3}/sens/vsteer'.format(config['work_dir'],datea,config['storm'],metname)
       if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
       if plotDict.get('output_sens', False):
-        writeSensFile(lat, lon, fhr, umea, sens, sigv, datea + '/' + bbnn + '/' + datea + "_f" + fhrt + "_vsteer_sens.nc", plotDict)
+        writeSensFile(lat, lon, fhr, umea, sens, sigv, '{0}/{1}/{0}_f{2}_vsteer_sens.nc'.format(datea,bbnn,fhrt), plotDict)
 
-      plotVecSens(lat, lon, sens, umea, vmea, sigv, outdir + '/' + datea + "_f" + fhrt + "_vsteer_sens.png", plotDict)
+      plotVecSens(lat, lon, sens, umea, vmea, sigv, '{0}/{1}_f{2}_vsteer_sens.png'.format(outdir,datea,fhrt), plotDict)
 
 
       #  Rotate wind into major axis direction, compute sensitivity to steering wind in that direction
@@ -149,26 +153,27 @@ class ComputeSensitivity:
       sens, sigv = computeSens(wens, evar, metric)
       sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
 
-      outdir = config['work_dir'] + "/" + datea + '.' + config['storm'] + '/' + metname + '/sens/masteer'
+      outdir = '{0}/{1}.{2}/{3}/sens/masteer'.format(config['work_dir'],datea,config['storm'],metname)
       if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
       if plotDict.get('output_sens', False):
-        writeSensFile(lat, lon, fhr, emea, sens, sigv, datea + '/' + bbnn + '/' + datea + "_f" + fhrt + "_masteer_sens.nc", plotDict)
+        writeSensFile(lat, lon, fhr, emea, sens, sigv, '{0}/{1}/{0}_f{2}_masteer_sens.nc'.format(datea,bbnn,fhrt), plotDict)
 
-      plotVecSens(lat, lon, sens, umea, vmea, sigv, outdir + '/' + datea + "_f" + fhrt + "_masteer_sens.png", plotDict)
+      plotVecSens(lat, lon, sens, umea, vmea, sigv, '{0}/{1}_f{2}_masteer_sens.png'.format(outdir,datea,fhrt), plotDict)
 
-      outdir = config['work_dir'] + "/" + datea + '.' + config['storm'] + '/' + metname + '/sens_sc/masteer'
+      outdir = '{0}/{1}.{2}/{3}/sens_sc/masteer'.format(config['work_dir'],datea,config['storm'],metname)
       if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
-      plotVecSens(lat, lon, sens, umea, vmea, sigv, outdir + '/' + datea + "_f" + fhrt + "_masteer_sens.png", stceDict)
+      plotVecSens(lat, lon, sens, umea, vmea, sigv, '{0}/{1}_f{2}_masteer_sens.png'.format(outdir,datea,fhrt), stceDict)
 
 
       #  Read 250 hPa PV, compute sensitivity to that field, if the file exists
-      if os.path.isfile(config['work_dir'] + "/" + datea + "_f" + fhrt + "_pv250_ens.nc"): 
+      ensfile = '{0}/{1}_f{2}_pv250_ens.nc'.format(config['work_dir'],datea,fhrt)
+      if os.path.isfile(ensfile): 
       
-         efile = nc.Dataset(config['work_dir'] + "/" + datea + "_f" + fhrt + "_pv250_ens.nc")
+         efile = nc.Dataset(ensfile)
          lat   = efile.variables['latitude'][:]
          lon   = efile.variables['longitude'][:]
          ens   = np.squeeze(efile.variables['ensemble_data'][:])
@@ -179,19 +184,19 @@ class ComputeSensitivity:
          sens, sigv = computeSens(ens, evar, metric)
          sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
 
-         outdir = config['work_dir'] + "/" + datea + '.' + config['storm'] + '/' + metname + '/sens/pv250'
+         outdir = '{0}/{1}.{2}/{3}/sens/pv250'.format(config['work_dir'],datea,config['storm'],metname)
          if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
          if plotDict.get('output_sens', False):
-            writeSensFile(lat, lon, fhr, emea, sens, sigv, datea + '/' + bbnn + '/' + datea + "_f" + fhrt + "_pv250hPa_sens.nc", plotDict)
+            writeSensFile(lat, lon, fhr, emea, sens, sigv, '{0}/{1}/{0}_f{2}_pv250hPa_sens.nc'.format(datea,bbnn,fhrt), plotDict)
 
          plotDict['meanCntrs'] = np.array([1.0, 2.0, 3.0, 4.0, 5.0, 6.0])
-         plotScalarSens(lat, lon, sens, emea, sigv, outdir + '/' + datea + "_f" + fhrt + "_pv250hPa_sens.png", plotDict)
+         plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_pv250hPa_sens.png'.format(outdir,datea,fhrt), plotDict)
 
 
       #  Read 500 hPa height, compute sensitivity to that field
-      efile = nc.Dataset(config['work_dir'] + "/" + datea + "_f" + fhrt + "_h500_ens.nc")
+      efile = nc.Dataset('{0}/{1}_f{2}_h500_ens.nc'.format(config['work_dir'],datea,fhrt))
       eVar = efile.variables
 
       lat  = eVar['latitude'][:]
@@ -204,15 +209,15 @@ class ComputeSensitivity:
       sens, sigv = computeSens(ens, evar, metric)
       sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
 
-      outdir = config['work_dir'] + "/" + datea + '.' + config['storm'] + '/' + metname + '/sens/h500'
+      outdir = '{0}/{1}.{2}/{3}/sens/h500'.format(config['work_dir'],datea,config['storm'],metname)
       if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
       if plotDict.get('output_sens', False):
-        writeSensFile(lat, lon, fhr, emea, sens, sigv, datea + '/' + bbnn + '/' + datea + "_f" + fhrt + "_h500hPa_sens.nc", plotDict)
+        writeSensFile(lat, lon, fhr, emea, sens, sigv, '{0}/{1}/{0}_f{2}_h500hPa_sens.nc'.format(datea,bbnn,fhrt), plotDict)
 
       plotDict['meanCntrs'] = np.array([5400, 5460, 5520, 5580, 5640, 5700, 5760, 5820, 5880, 5940])
-      plotScalarSens(lat, lon, sens, emea, sigv, outdir + '/' + datea + "_f" + fhrt + "_h500hPa_sens.png", plotDict)
+      plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_h500hPa_sens.png'.format(outdir,datea,fhrt), plotDict)
 
 #      outdir = config['work_dir'] + "/" + datea + '.' + config['storm'] + '/' + metname + '/sens_sc/h500'
 #      if not os.path.isdir(outdir):

@@ -85,8 +85,8 @@ class ComputeTCFields:
                    'longitude': {'dtype': 'float32'}, 'ensemble': {'dtype': 'int32'}}
 
         #  Compute steering wind components
-        uoutfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_usteer_ens.nc'
-        voutfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_vsteer_ens.nc'
+        uoutfile='{0}/{1}_f{2}_usteer_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
+        voutfile='{0}/{1}_f{2}_vsteer_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         if (not os.path.isfile(uoutfile) or not os.path.isfile(voutfile)) and config['fields'].get('calc_uvsteer','True') == 'True':
 
           logging.warning("  Computing steering wind information")
@@ -122,8 +122,8 @@ class ComputeTCFields:
              vwnd.to_netcdf('wind_info.nc', mode='a', encoding=wencode, format='NETCDF3_CLASSIC')
 
              #  Call NCL to remove TC winds, read result from file
-             os.system('ncl -Q ' + config['script_dir'] + '/tc_steer.ncl tclat=' + str(self.ens_lat[n]) + 
-                       ' tclon=' + str(self.ens_lon[n]) + ' tcradius=' + str(tcradius))
+             os.system('ncl -Q {0}/tc_steer.ncl tclat={1} tclon={2} tcradius={3}'.format(config['script_dir'],\
+                                   str(self.ens_lat[n]), str(self.ens_lon[n]), str(tcradius)))
 
              wfile     = nc.Dataset('wind_info.nc')
              uwnd[:,:] = wfile.variables['u'][:,:]
@@ -171,7 +171,7 @@ class ComputeTCFields:
           logging.warning("  Obtaining steering wind information from file")
 
         #  Read 500 hPa geopotential height from file, if ensemble file is not present
-        outfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_h500_ens.nc'
+        outfile='{0}/{1}_f{2}_h500_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         if (not os.path.isfile(outfile) and config['fields'].get('calc_h500hPa','True') == 'True'):
 
           logging.warning("  Computing 500 hPa height")
@@ -191,7 +191,7 @@ class ComputeTCFields:
           logging.warning("  Obtaining 500 hPa height data from {0}".format(outfile))
 
         #  Compute 250 hPa PV if the file does not exist
-        outfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_pv250_ens.nc'
+        outfile='{0}/{1}_f{2}_pv250_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         if (not os.path.isfile(outfile) and config['fields'].get('calc_pv250hPa','True') == 'True'):
 
           logging.warning("  Computing 250 hPa PV")
@@ -233,7 +233,7 @@ class ComputeTCFields:
           logging.warning("  Obtaining 250 hPa PV data from {0}".format(outfile))
 
         #  Compute the 700 hPa equivalent potential temperature (if desired and file is missing)
-        outfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_e700_ens.nc'
+        outfile='{0}/{1}_f{2}_e700_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         if (not os.path.isfile(outfile) and config['fields'].get('calc_the700hPa','False') == 'True'):
 
           logging.warning("  Computing 700 hPa Theta-E")
@@ -264,7 +264,7 @@ class ComputeTCFields:
           logging.warning("  Obtaining 700 hPa Theta-e data from {0}".format(outfile))
 
         #  Compute the 500-850 hPa water vapor mixing ratio (if desired and file is missing)
-        outfile=config['work_dir'] + "/" + str(self.datea_str) + '_f' + self.fff + '_q500-850_ens.nc'
+        outfile='{0}/{1}_f{2}_q500-850_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         if (not os.path.isfile(outfile) and config['fields'].get('calc_q500-850hPa','False') == 'True'):
 
           logging.warning("  Computing 500-850 hPa Water Vapor")

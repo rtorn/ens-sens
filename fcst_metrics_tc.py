@@ -1029,11 +1029,12 @@ class ComputeForecastMetrics:
         along with the precipitation perturbation that is consistent with the first EOF. 
         '''
 
+        infile = self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm)
         try:
-           f = open(self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm), 'r')
+           f = open(infile, 'r')
         except IOError:
-           logging.warning(self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm) + " does not exist.  Cannot compute precip EOF")
-           return 0
+           logging.warning('{0} does not exist.  Cannot compute precip EOF'.format(infile))
+           return None
 
         #  Read the text file that contains information on the precipitation metric
         fhr1 = int(f.readline())

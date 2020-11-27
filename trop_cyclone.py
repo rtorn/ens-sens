@@ -203,7 +203,8 @@ def plot_ens_tc_track(atcf, bvital, storm, datea, config):
         pass
 
     #  Create the output plot, which is the result of this script
-    plt.savefig(output_dir + "/" + config.get('trackfile',str(datea) + "_" + str(storm) + "_track.png"),format='png',dpi=150,bbox_inches='tight')
+    plt.savefig('{0}/{1}'.format(output_dir,config.get('trackfile','{0}_{1}_track.png'.format(str(datea),str(storm)))), \
+                        format='png',dpi=150,bbox_inches='tight') 
     plt.close()
 
 
@@ -344,7 +345,8 @@ def plot_ens_tc_intensity(atcf, b_vital, storm, datea, config):
         pass
 
     #  save the figure to a .png file in output graphics directory
-    plt.savefig(output_dir + "/" + config.get('intfile',str(datea) + "_" + str(storm) + "_intensity.png"),format='png',dpi=150,bbox_inches='tight')
+    plt.savefig('{0}/{1}'.format(output_dir,config.get('intfile','{0}_{1}_intensity.png'.format(str(datea),str(storm)))), \
+                  format='png',dpi=150,bbox_inches='tight')
     plt.close()
 
 

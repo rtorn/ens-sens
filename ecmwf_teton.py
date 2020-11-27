@@ -43,11 +43,12 @@ def stage_grib_files(datea, config):
        datef   = init + dt.timedelta(hours=fhr)
        datef_s = datef.strftime("%m%d%H%M")
 
-       grib_file = "E1E{0}{1}1".format(str(init_s), str(datef_s))
-       infile    = config['model_dir'] + '/' + grib_file
+       grib_file = 'E1E{0}{1}1'.format(str(init_s), str(datef_s))
+       infile    = '{0}/{1}'.format(config['model_dir'],grib_file)
+       outfile   = '{0}/{1}'.format(config['work_dir'],grib_file)
 
        #  Only try to copy if the file is not there
-       if ( not os.path.isfile(config['work_dir'] + '/' + grib_file) ):
+       if ( not os.path.isfile(outfile) ):
 
           #  Wait for the source file to be present 
           while not os.path.exists(infile):
@@ -58,9 +59,9 @@ def stage_grib_files(datea, config):
              time.sleep(10)
 
           try:  #  Try to link from the source to the work directory
-             os.symlink(infile, config['work_dir'] + '/' + grib_file)
+             os.symlink(infile, outfile)
           except Exception as err:
-             print(err)
+             raise err
 
 
 def stage_atcf_files(datea, bbnnyyyy, config):
@@ -83,7 +84,7 @@ def stage_atcf_files(datea, bbnnyyyy, config):
         config     (dict):  The dictionary with configuration information
     '''
 
-    src  = config['atcf_dir'] + "/a" + bbnnyyyy + ".dat"
+    src  = '{0}/a{1}.dat'.format(config['atcf_dir'],bbnnyyyy)
     nens = int(config['num_ens'])
 
     #  Wait for the source file to be present 
@@ -91,7 +92,7 @@ def stage_atcf_files(datea, bbnnyyyy, config):
        time.sleep(20.5)
 
     #  Wait for the ensemble ATCF information to be placed in the file
-    while ( len(os.popen("sed -ne /" + datea + "/p " + src + " | sed -ne /EE/p").read()) == 0 ):
+    while ( len(os.popen('sed -ne /{0}/p {1} | sed -ne /EE/p'.format(datea,src)).read()) == 0 ):
        time.sleep(20.7)
 
     #  Wait for the file to be finished being copied
@@ -101,13 +102,13 @@ def stage_atcf_files(datea, bbnnyyyy, config):
     for n in range(nens + 1):
 
        nn = '%0.2i' % n
-       file_name = config['work_dir'] + "/atcf_" + nn + ".dat"
+       file_name = '{0}/atcf_{1}.dat'.format(config['work_dir'],nn)
 
        #  If the specific member's ATCF file does not exist, copy from the source file with sed.
        if not os.path.isfile(file_name):
 
           fo = open(file_name,"w")
-          fo.write(os.popen("sed -ne /" + datea + "/p " + src + " | sed -ne /EE" + nn + "/p").read())
+          fo.write(os.popen('sed -ne /{0}/p {1} | sed -ne /EE{2}/p'.format(datea,src,nn)).read())
           fo.close()
 
 
@@ -171,7 +172,7 @@ class ReadGribFiles:
            vdict     (dict):  The dictionary object with variable information
        '''
 
-       vname = self.var_dict[varname] + '_cf'
+       vname = '{0}_cf'.format(self.var_dict[varname])
 
        if 'latitude' in vdict:
 
@@ -230,7 +231,7 @@ class ReadGribFiles:
            vdict     (dict):  The dictionary object with variable information
        '''
 
-       vname = self.var_dict[varname] + '_cf'
+       vname = '{0}_cf'.format(self.var_dict[varname])
 
        #  Create attributes based on what is in the file
        attrlist = {}
@@ -267,13 +268,13 @@ class ReadGribFiles:
        if 'isobaricInhPa' in vdict:
 
           if member == 0:  #  Control member
-             vname = self.var_dict[varname] + '_cf'
+             vname = '{0}_cf'.format(self.var_dict[varname])
              vout  = self.grib_dict[vname].sel(latitude=slice(vdict['lat_start'], vdict['lat_end']),  \
                                                longitude=slice(vdict['lon_start'], vdict['lon_end']), \
                                                isobaricInhPa=slice(vdict['pres_start'], vdict['pres_end']))
 
           else:
-             vname = self.var_dict[varname] + '_pf'
+             vname = '{0}_pf'.format(self.var_dict[varname])
              vout  = self.grib_dict[vname].sel(number=member,                                         \
                                                latitude=slice(vdict['lat_start'], vdict['lat_end']),  \
                                                longitude=slice(vdict['lon_start'], vdict['lon_end']), \
@@ -283,30 +284,19 @@ class ReadGribFiles:
        else:
 
           if member == 0:  #  Control member
-             vname = self.var_dict[varname] + '_cf'
+             vname = '{0}_cf'.format(self.var_dict[varname])
              vout  = self.grib_dict[vname].sel(latitude=slice(vdict['lat_start'], vdict['lat_end']), \
                                                longitude=slice(vdict['lon_start'], vdict['lon_end']))
 
           else:
 
-             vname = self.var_dict[varname] + '_pf'
+             vname = '{0}_pf'.format(self.var_dict[varname])
              vout  = self.grib_dict[vname].sel(number=member,                                        \
                                                latitude=slice(vdict['lat_start'], vdict['lat_end']), \
                                                longitude=slice(vdict['lon_start'], vdict['lon_end']))
 
        return(vout)
 
-
-    @staticmethod
-    def __check_file_exists(filename):
-        isfile = False
-        try:
-            if os.path.isfile(filename):
-                isfile = True
-        except Exception as err:
-            print(err)
-
-        return isfile
 
 if __name__ == '__main__':
 
