@@ -90,6 +90,8 @@ class ComputeSensitivity:
       stceDict = plotDict.copy()
       stceDict['output_sens']=False
       stceDict['range_rings']='True'
+      stceDict['ring_center_lat']=float(plotDict['tcLat'])
+      stceDict['ring_center_lon']=float(plotDict['tcLon'])
       stceDict['min_lat']=float(plotDict['tcLat'])-float(plotDict.get('storm_center_radius', 10.))
       stceDict['max_lat']=float(plotDict['tcLat'])+float(plotDict.get('storm_center_radius', 10.))
       stceDict['min_lon']=float(plotDict['tcLon'])-float(plotDict.get('storm_center_radius', 10.))

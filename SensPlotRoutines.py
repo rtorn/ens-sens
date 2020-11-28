@@ -50,6 +50,32 @@ def addDrop(dropfile, plt, plotDict):
     pass
 
 
+def addRangeRings(cen_lat, cen_lon, lat, lon, plt, plotDict):
+  '''
+  Function that adds range rings from a center lat/lon point to a sensitivity plot.
+  Users can specify the interval of the rings and their characteristics.
+
+  Attributes:
+      cen_lat  (float):  center latitude value
+      cen_lon  (float):  center longitude value
+      lat      (float):  vector of model latitude grid values
+      lon      (float):  vector of model longitude grid values
+      plt     (object):  matplotlib object to add the rawinsonde markers to
+      plotDict (dict.):  dictionary that contains configuration options
+  '''
+
+  lonarr, latarr = np.meshgrid(lon, lat)
+  tcdist = great_circle(cen_lon, cen_lat, lonarr, latarr)
+
+  if 'ring_values' in plotDict:
+    rrings = json.loads(plotDict.get('ring_values'))
+  else:
+    rrings = [500., 1000., 1500.]
+
+  pltrr = plt.contour(lon[:],lat[:],tcdist,rrings,linewidths=1.0, colors='gray')
+  lab = plt.clabel(pltrr, [])
+
+
 def addRawin(rawinfile, plt, plotDict):
   '''
   This function adds markers that represent rawinsonde locations based on a file that is 
@@ -114,18 +140,26 @@ def computeSens(ens, evar, metric):
 
 def great_circle(lon1, lat1, lon2, lat2):
     '''
-    Function that computes the distance between two lat/lon pairs.  The result of this function
+    Function that computes the distance between two lat/lon pairs.  The result of this function 
     is the distance in kilometers.
 
     Attributes
         lon1 (float): longitude of first point
         lat1 (float): latitude of first point
-        lon2 (float): longitude of second point
-        lat2 (float): latitude of second point
+        lon2 (float): longitude of second point.  Can be an array
+        lat2 (float): latitude of second point.  Can be an array
     '''
 
-    lon1, lat1, lon2, lat2 = map(radians, [lon1, lat1, lon2, lat2])
-    return 6371. * (acos(sin(lat1) * sin(lat2) + cos(lat1) * cos(lat2) * cos(lon1 - lon2)))
+    dist = np.empty(lon2.shape)
+
+    lon1 = np.radians(lon1)
+    lat1 = np.radians(lat1)
+    lon2[:] = np.radians(lon2[:])
+    lat2[:] = np.radians(lat2[:])
+
+    dist[:] = np.sin(lat1) * np.sin(lat2[:]) + np.cos(lat1) * np.cos(lat2[:]) * np.cos(lon1 - lon2[:])
+
+    return 6371. * np.arccos(np.minimum(dist,1.0))
 
 
 def writeSensFile(lat, lon, fhr, emea, sens, sigv, sensfile, plotDict):
@@ -273,20 +307,9 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
     plt.plot(tcLon, tcLat, 'o', color='black', markersize=10);
 
   #  Add range rings to the file if desired
-  if plotDict.get('range_rings', 'False')=='True' and tcLat != -9999. and tcLon != -9999:
-    tcdist = np.zeros(sens.shape)
-    tccen = (tcLat, tcLon)
-    for i in range(len(lon)):
-      for j in range(len(lat)):
-        tcdist[j,i] = great_circle(tcLon, tcLat, lon[i], lat[j])
-
-    if 'ring_values' in plotDict:
-      rrings = json.loads(plotDict.get('ring_values'))
-    else:
-      rrings = [500., 1000., 1500.]
-
-    pltrr = plt.contour(lon[:],lat[:],tcdist,rrings,linewidths=1.0, colors='gray')
-    lab = plt.clabel(pltrr, [])
+  if plotDict.get('range_rings', 'False')=='True' and \
+     'ring_center_lat' in plotDict and 'ring_center_lon' in plotDict:
+    addRangeRings(plotDict['ring_center_lat'], plotDict['ring_center_lon'], lat, lon, plt, plotDict)
 
   addDrop(plotDict.get("dropsonde_file","null"), plt, plotDict)
 
@@ -370,23 +393,12 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
     plt.title(plotDict['plotTitle'])
 
   if tcLat != -9999. and tcLon != -9999.:
-    plt.plot(tcLon, tcLat, 'o', color='black', markersize=10);
+    plt.plot(tcLon, tcLat, 'o', color='black', markersize=10)
 
   #  Add range rings to the file if desired
-  if plotDict.get('range_rings', 'False')=='True' and tcLat != -9999. and tcLon != -9999:
-    tcdist = np.zeros(sens.shape)
-    tccen = (tcLat, tcLon)
-    for i in range(len(lon)):
-      for j in range(len(lat)):
-        tcdist[j,i] = great_circle(tcLon, tcLat, lon[i], lat[j])
-
-    if 'ring_values' in plotDict:
-      rrings = json.loads(plotDict.get('ring_values'))
-    else:
-      rrings = [500., 1000., 1500.]
-
-    pltrr = plt.contour(lon[:],lat[:],tcdist,rrings,linewidths=1.0, colors='gray')
-    lab = plt.clabel(pltrr, [])
+  if plotDict.get('range_rings', 'False')=='True' and \
+     'ring_center_lat' in plotDict and 'ring_center_lon' in plotDict:
+    addRangeRings(plotDict['ring_center_lat'], plotDict['ring_center_lon'], lat, lon, plt, plotDict)    
 
   addDrop(plotDict.get("dropsonde_file","null"), plt, plotDict)
 
