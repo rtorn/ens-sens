@@ -295,6 +295,9 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
   addRawin(plotDict.get("rawinsonde_file","null"), plt, plotDict)
 
   #  create ensemble-mean contours, sensitivity field, and stat. sig
+  if plotDict.get('zero_non_sig_sens','False') == 'True':
+     sens[sigv < 2.007] = 0.
+
   pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both')
   pltm = plt.contour(lon[:],lat[:],emea,plotDict.get('meanCntrs'),linewidths=1.5, colors='k', zorder=10)
   plts = plt.contour(lon[:],lat[:],sigv,[-2.007, 2.007], linewidths=1.0, colors='k')
@@ -384,6 +387,9 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
   addRawin(plotDict.get("rawinsonde_file","null"), plt, plotDict)
 
   #  create ensemble-mean vectors, sensitivity field, and stat. sig
+  if plotDict.get('zero_non_sig_sens','False') == 'True':
+     sens[sigv < 2.007] = 0.
+
   pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both')
   pltm = plt.barbs(lon[::barbInt], lat[::barbInt], umea[::barbInt,::barbInt]*1.94, vmea[::barbInt,::barbInt]*1.94, pivot='middle', length=6, linewidths=0.2, zorder=10)
   plts = plt.contour(lon[:],lat[:],sigv,[-2.007, 2.007], linewidths=0.5, colors='k')
