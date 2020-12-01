@@ -148,7 +148,7 @@ class ReadGribFiles:
 
         except IOError as exc:
            raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
-                 
+
         #  This is a dictionary that maps from generic variable names to the name of variable in file
         self.var_dict = {'zonal_wind': 'u',           \
                          'meridional_wind': 'v',      \
@@ -157,6 +157,8 @@ class ReadGribFiles:
                          'relative_humidity': 'r',    \
                          'sea_level_pressure': 'msl', \
                          'precipitation': 'tp'}
+
+        self.nens = int(self.grib_dict['gh_pf'].attrs['GRIB_totalNumber'])
 
 
     def set_var_bounds(self, varname, vdict):
@@ -250,6 +252,12 @@ class ReadGribFiles:
                              coords={'ensemble': [i for i in range(nens)], 'latitude': latvec, 'longitude': lonvec}) 
 
        return(ensarr)
+
+
+    def read_pressure_levels(self, varname):
+
+       vname = '{0}_cf'.format(self.var_dict[varname])
+       return self.grib_dict[vname].isobaricInhPa[:]
 
 
     #  Function to read a single ensemble member's forecast field
