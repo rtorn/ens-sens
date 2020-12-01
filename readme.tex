@@ -155,6 +155,8 @@ html\_dir & string & Path to directory where output figures will be placed.
 No default value.  \\ \hline
 outgrid\_dir & string & Path to directory where gridded sensitivity output will be placed.
 No default value.  \\ \hline
+log\_dir & string & Path to directory where log file output from the python logging function
+will be placed.  No default value. \\ \hline
 \end{tabular}
 \end{center}
 \end{table}
@@ -186,6 +188,10 @@ int\_track\_fhr1 & float & Initial forecast hour to use for integrated track met
 int\_track\_fhr1 & float & Final forecast hour to use for integrated track metric.  Default:  120~h \\ \hline
 kinetic\_energy\_metric & logical & True to calculate area-average kinetic energy metric.
 Default:  False \\ \hline
+precipitation\_eof\_metric & logical & True to calculate forecast metric that is EOF/PC of the 
+precipitation over the specified time window and area.  Currently experimental.  Default:  False \\ \hline
+precip\_metric\_file & string & Path to file that contains precipitation EOF metric settings.  
+Assumes the file has the format \{yyyymmddhh\}\_\{storm\}\_precip.  No default value. \\ \hline
 \end{tabular}
 \end{center}
 \end{table}
@@ -228,6 +234,8 @@ min\_lon & float & Minimum longitude for sensitivity plots.  Default:  -140.0, a
 run\_NHC\_sens.py based on basin.  \\ \hline
 max\_lon & float & Maximum longitude for sensitivity plots.  Default:  -20.0, also set in
 run\_NHC\_sens.py based on basin.  \\ \hline
+zero\_non\_sig\_sens & logical & True to plot only the statistically significant 
+sensitivity locations.  Default:  False   \\ \hline
 grid\_interval & float & Latitude and Longitude line grid interval in degrees.
 Default:  10$^{\circ}$.  \\ \hline
 barb\_interval & integer & Number of grid points in between each wind barb in the plot.
