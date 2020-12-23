@@ -118,16 +118,29 @@ class ReadGribFiles:
         except IOError as exc:
            raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
 
+        file_name = '{0}/gefs{1}/gefs_pgrb2bp5_all_{2}z'.format(config['model_dir'],datea[0:8],datea[8:10])
+        try:
+           self.ds_dictb = xr.open_dataset(file_name)
+        except IOError as exc:
+           raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
+
+
         #  Put longitude into -180 to 180 format
-        self.ds_dict.coords['lon'] = (self.ds_dict.coords['lon'] + 180) % 360 - 180
+        self.ds_dict.coords['lon']  = (self.ds_dict.coords['lon'] + 180) % 360 - 180
+        self.ds_dictb.coords['lon'] = (self.ds_dictb.coords['lon'] + 180) % 360 - 180
 
         #  This is a dictionary that maps from generic variable names to the name of variable in file
-        self.var_dict = {'zonal_wind': 'ugrdprs',         \
-                         'meridional_wind': 'vgrdprs',    \
-                         'geopotential_height': 'hgtprs', \
-                         'temperature': 'tmpprs',         \
-                         'relative_humidity': 'rhprs',    \
-                         'sea_level_pressure': 'prmslmsl'}
+        self.var_dict = {'zonal_wind': 'ugrdprs',          \
+                         'meridional_wind': 'vgrdprs',     \
+                         'geopotential_height': 'hgtprs',  \
+                         'temperature': 'tmpprs',          \
+                         'relative_humidity': 'rhprs',     \
+                         'sea_level_pressure': 'prmslmsl', \
+                         'precipitation': 'apcpsfc' }
+
+        #print(self.ds_dict)
+
+        self.nens = int(len(self.ds_dict['hgtprs'].coords['ens']))
 
 
     def set_var_bounds(self, varname, vdict):
@@ -215,6 +228,11 @@ class ReadGribFiles:
        return(ensarr)
 
 
+    def read_pressure_levels(self, varname):
+
+       return self.ds_dict[self.var_dict[varname]].lev[:]
+
+
     #  Function to read a single ensemble member's forecast field
     def read_grib_field(self, varname, member, vdict):
        '''
@@ -238,6 +256,29 @@ class ReadGribFiles:
                                           lev=slice(vdict['pres_start'], vdict['pres_end']), \
                                           time=slice(self.datef, self.datef),                \
                                           ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+
+          if vdict['pres_start'] != vdict['pres_end']:
+
+             for k in range(len(vout[:,0,0])):
+
+                if np.isnan(vout[k,0,0]):
+
+                   vout[k,:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                              lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                              lev=slice(vout.isobaricInhPa.values[k], vout.isobaricInhPa.values[k]), \
+                                              time=slice(self.datef, self.datef),                \
+                                              ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+
+          else:
+
+             if np.isnan(vout[0,0]):
+
+                vout[:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                         lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                         lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                         time=slice(self.datef, self.datef),                \
+                                         ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+
 
        #  Read the only level if it is a single level variable
        else:

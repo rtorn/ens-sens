@@ -64,9 +64,9 @@ class ComputeSensitivity:
 
       #  Obtain the metric information (here read from file)
       try:
-         mfile = nc.Dataset('{0}/{1}_{2}.nc'.format(config['output_dir'],datea,metname))
+         mfile = nc.Dataset('{0}/{1}_{2}.nc'.format(config['work_dir'],datea,metname))
       except IOError:
-         logging.error('{0}/{1}_{2}.nc does not exist'.format(config['output_dir'],datea,metname))
+         logging.error('{0}/{1}_{2}.nc does not exist'.format(config['work_dir'],datea,metname))
          return
 
       metric = mfile.variables['fore_met_init'][:]
