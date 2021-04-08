@@ -145,6 +145,13 @@ class ComputeTCFields:
                uint[:,:] = uint[:,:] + 0.5 * (uwnd[k,:,:]+uwnd[k+1,:,:]) * abs(pres[k+1]-pres[k])
                vint[:,:] = vint[:,:] + 0.5 * (vwnd[k,:,:]+vwnd[k+1,:,:]) * abs(pres[k+1]-pres[k])
 
+#             if pres[0] > pres[-1]:
+#               uint = -np.trapz(uwnd[:,:,:], pres, axis=0) / abs(pres[-1]-pres[0])
+#               vint = -np.trapz(vwnd[:,:,:], pres, axis=0) / abs(pres[-1]-pres[0])
+#             else:
+#               uint = np.trapz(uwnd[:,:,:], pres, axis=0) / abs(pres[-1]-pres[0])
+#               vint = np.trapz(vwnd[:,:,:], pres, axis=0) / abs(pres[-1]-pres[0])
+
              if lat[0] > lat[-1]:
                slat1 = lat2
                slat2 = lat1
@@ -153,8 +160,8 @@ class ComputeTCFields:
                slat2 = lat2
 
              #  Write steering flow to ensemble arrays
-             uensmat[n,:,:] = np.squeeze(uint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[nlev-1]-pres[0])
-             vensmat[n,:,:] = np.squeeze(vint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[nlev-1]-pres[0])
+             uensmat[n,:,:] = np.squeeze(uint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[-1]-pres[0])
+             vensmat[n,:,:] = np.squeeze(vint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[-1]-pres[0])
 
              #  Compute the vorticity associated with the steering wind
 
@@ -169,6 +176,7 @@ class ComputeTCFields:
         else:
 
           logging.warning("  Obtaining steering wind information from file")
+
 
         #  Read 500 hPa geopotential height from file, if ensemble file is not present
         outfile='{0}/{1}_f{2}_h500_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
@@ -190,6 +198,7 @@ class ComputeTCFields:
 
           logging.warning("  Obtaining 500 hPa height data from {0}".format(outfile))
 
+
         #  Compute 250 hPa PV if the file does not exist
         outfile='{0}/{1}_f{2}_pv250_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         if (not os.path.isfile(outfile) and config['fields'].get('calc_pv250hPa','True') == 'True'):
@@ -207,8 +216,8 @@ class ComputeTCFields:
             #  Read all the necessary files from file, smooth fields, so sensitivities are useful
             tmpk = g1.read_grib_field('temperature', n, vDict) * units('K')
 
-            lats = tmpk.latitude.values
-            lons = tmpk.longitude.values
+            lats = tmpk.latitude.values * units('degrees')
+            lons = tmpk.longitude.values * units('degrees')
             pres = tmpk.isobaricInhPa.values * units('hPa')
 
             tmpk = mpcalc.smooth_n_point(tmpk, 9, 4)
@@ -218,11 +227,11 @@ class ComputeTCFields:
             uwnd = mpcalc.smooth_n_point(g1.read_grib_field('zonal_wind', n, vDict) * units('m/s'), 9, 4)
             vwnd = mpcalc.smooth_n_point(g1.read_grib_field('meridional_wind', n, vDict) * units('m/s'), 9, 4)
 
-            dx, dy = mpcalc.lat_lon_grid_deltas(lons, lats)
+            dx, dy = mpcalc.lat_lon_grid_deltas(lons, lats, x_dim=-1, y_dim=-2, geod=None)
 
             #  Compute PV and place in ensemble array
             pvout = mpcalc.potential_vorticity_baroclinic(thta, pres[:, None, None], uwnd, vwnd,
-                                           dx[None, :, :], dy[None, :, :], lats[None, :, None] * units('degrees'))
+                                           dx[None, :, :], dy[None, :, :], lats[None, :, None])
 
             ensmat[n,:,:] = np.squeeze(pvout[np.where(pres == 250 * units('hPa'))[0],:,:]) * 1.0e6
  
@@ -231,6 +240,7 @@ class ComputeTCFields:
         elif os.path.isfile(outfile):
 
           logging.warning("  Obtaining 250 hPa PV data from {0}".format(outfile))
+
 
         #  Compute the 700 hPa equivalent potential temperature (if desired and file is missing)
         outfile='{0}/{1}_f{2}_e700_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
@@ -246,15 +256,11 @@ class ComputeTCFields:
 
           for n in range(self.nens):
 
-            tmpk = np.squeeze(g1.read_grib_field('temperature', n, vDict))
-            relh = np.squeeze(g1.read_grib_field('relative_humidity', n, vDict))
-            relh[:,:] = np.minimum(np.maximum(0.01 * relh[:,:], 0.0001), 1.0)
-            relh.attrs['units'] = 'dimensionless'
+            tmpk = np.squeeze(g1.read_grib_field('temperature', n, vDict)) * units('K')
+            relh = np.minimum(np.maximum(np.squeeze(g1.read_grib_field('relative_humidity', n, vDict)), 0.01), 100.0) * units.percent
 
-            tdew = mpcalc.dewpoint_from_relative_humidity(tmpk, relh).to(units.K)
-
+            tdew = mpcalc.dewpoint_from_relative_humidity(tmpk, relh)
             pres = tmpk.isobaricInhPa.values * units('hPa')
-
             ensmat[n,:,:] = np.squeeze(mpcalc.equivalent_potential_temperature(pres[None, None], tmpk, tdew))
 
           ensmat.to_netcdf(outfile, encoding=dencode)
@@ -262,6 +268,7 @@ class ComputeTCFields:
         elif os.path.isfile(outfile):
 
           logging.warning("  Obtaining 700 hPa Theta-e data from {0}".format(outfile))
+
 
         #  Compute the 500-850 hPa water vapor mixing ratio (if desired and file is missing)
         outfile='{0}/{1}_f{2}_q500-850_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
@@ -281,22 +288,14 @@ class ComputeTCFields:
 
           for n in range(self.nens):
 
-            tmpk = np.squeeze(g1.read_grib_field('temperature', n, vDict))
-            relh = np.squeeze(g1.read_grib_field('relative_humidity', n, vDict))
-            relh[:,:,:] = np.minimum(np.maximum(0.01 * relh[:,:,:], 0.0001), 1.0)
-            relh.attrs['units'] = 'dimensionless'
+            tmpk = np.squeeze(g1.read_grib_field('temperature', n, vDict)) * units('K')
+            relh[:,:,:] = np.minimum(np.maximum(g1.read_grib_field('relative_humidity', n, vDict), 0.01), 100.0) * units('percent')
 
-            pres = tmpk.isobaricInhPa.values
-
-            qvap = mpcalc.mixing_ratio_from_relative_humidity(relh, tmpk, pres[:,None,None] * units('hPa'))
-
-            ensmat[n,:,:] = 0.0
+            pres = (tmpk.isobaricInhPa.values * units.hPa).to(units.Pa)
+            qvap = mpcalc.mixing_ratio_from_relative_humidity(pres[:,None,None], tmpk, relh)
 
             #  Integrate water vapor over the pressure levels
-            for k in range(len(pres)-1):
-              ensmat[n,:,:] = ensmat[n,:,:] + 0.5 * (qvap[k,:,:]+qvap[k+1,:,:]) * abs(pres[k]-pres[k+1])
-
-            ensmat[n,:,:] = ensmat[n,:,:] * (100.0 / mpcon.earth_gravity)
+            ensmat[n,:,:] = np.abs(np.trapz(qvap, pres, axis=0)) / mpcon.earth_gravity
 
           ensmat.to_netcdf(outfile, encoding=dencode)
 
