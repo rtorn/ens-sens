@@ -112,17 +112,33 @@ class ReadGribFiles:
 #            modid = 'c'
 #        nn = '%0.2i' % member
 #        return '{0}/gefs{1}/ge{2}{3}_{4}z_pgrb2a'.format(self.src_path,self.datea_str[0:8],modid,nn,self.datea_str[8:10])
-        file_name = '{0}/gefs{1}/gefs_pgrb2ap5_all_{2}z'.format(config['model_dir'],datea[0:8],datea[8:10])
-        try:  
-           self.ds_dict = xr.open_dataset(file_name)
-        except IOError as exc:
-           raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
 
-        file_name = '{0}/gefs{1}/gefs_pgrb2bp5_all_{2}z'.format(config['model_dir'],datea[0:8],datea[8:10])
-        try:
-           self.ds_dictb = xr.open_dataset(file_name)
-        except IOError as exc:
-           raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
+        import warnings
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "ignore", category=xr.coding.variables.SerializationWarning)
+
+            file_name = '{0}/gefs{1}/gefs_pgrb2ap5_all_{2}z'.format(config['model_dir'], datea[0:8], datea[8:10])
+
+            try:
+                self.ds_dict = xr.open_dataset(file_name)
+            except (OSError, RuntimeError):
+                print("Read Error; Sleeping for 60s before trying again")
+                time.sleep(60)
+                self.ds_dict = xr.open_dataset(file_name)
+            except IOError as exc:
+                raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
+
+            file_name = '{0}/gefs{1}/gefs_pgrb2bp5_all_{2}z'.format(config['model_dir'], datea[0:8], datea[8:10])
+
+            try:
+                self.ds_dictb = xr.open_dataset(file_name)
+            except (OSError, RuntimeError):
+                print("Read Error; Sleeping for 60s before trying again")
+                time.sleep(60)
+                self.ds_dictb = xr.open_dataset(file_name)
+            except IOError as exc:
+                raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
 
 
         #  Put longitude into -180 to 180 format
@@ -244,52 +260,55 @@ class ReadGribFiles:
            member     (int):  ensemble member to read from file
            vdict     (dict):  The dictionary object with variable information
        '''
+       import warnings
+       with warnings.catch_warnings():
+            warnings.simplefilter("ignore", category=xr.coding.variables.SerializationWarning)
 
-       vname = self.var_dict[varname]
+            vname = self.var_dict[varname]
 
-       #  Read a single pressure level of data, if this is a variable that has pressure levels
-       if 'isobaricInhPa' in vdict:
+            #  Read a single pressure level of data, if this is a variable that has pressure levels
+            if 'isobaricInhPa' in vdict:
 
-          #  Rename the lat, lon, and pressure arrays to common convention
-          vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
-                                          lon=slice(vdict['lon_start'], vdict['lon_end']),   \
-                                          lev=slice(vdict['pres_start'], vdict['pres_end']), \
-                                          time=slice(self.datef, self.datef),                \
-                                          ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+               #  Rename the lat, lon, and pressure arrays to common convention
+               vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                                time=slice(self.datef, self.datef),                \
+                                                ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
 
-          if vdict['pres_start'] != vdict['pres_end']:
+               if vdict['pres_start'] != vdict['pres_end']:
 
-             for k in range(len(vout[:,0,0])):
+                  for k in range(len(vout[:,0,0])):
 
-                if np.isnan(vout[k,0,0]):
+                     if np.isnan(vout[k,0,0]):
 
-                   vout[k,:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
-                                              lon=slice(vdict['lon_start'], vdict['lon_end']),   \
-                                              lev=slice(vout.isobaricInhPa.values[k], vout.isobaricInhPa.values[k]), \
-                                              time=slice(self.datef, self.datef),                \
-                                              ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+                        vout[k,:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                   lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                   lev=slice(vout.isobaricInhPa.values[k], vout.isobaricInhPa.values[k]), \
+                                                   time=slice(self.datef, self.datef),                \
+                                                   ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
 
-          else:
+               else:
 
-             if np.isnan(vout[0,0]):
+                  if np.isnan(vout[0,0]):
 
-                vout[:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
-                                         lon=slice(vdict['lon_start'], vdict['lon_end']),   \
-                                         lev=slice(vdict['pres_start'], vdict['pres_end']), \
-                                         time=slice(self.datef, self.datef),                \
-                                         ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+                     vout[:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                             lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                             lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                             time=slice(self.datef, self.datef),                \
+                                             ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
 
 
-       #  Read the only level if it is a single level variable
-       else:
+            #  Read the only level if it is a single level variable
+            else:
 
-          #  Rename the lat and lon arrays to common convention
-          vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']), \
-                                          lon=slice(vdict['lon_start'], vdict['lon_end']), \
-                                          time=slice(self.datef, self.datef),              \
-                                          ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'})
+               #  Rename the lat and lon arrays to common convention
+               vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']), \
+                                                lon=slice(vdict['lon_start'], vdict['lon_end']), \
+                                                time=slice(self.datef, self.datef),              \
+                                                ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'})
 
-       return(vout)
+            return(vout)
 
 
     @staticmethod
