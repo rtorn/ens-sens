@@ -11,6 +11,9 @@ import metpy.constants as mpcon
 import metpy.calc as mpcalc
 from metpy.units import units
 
+import surgery
+
+
 class ComputeTCFields:
     '''
     Class that computes individual 2D ensemble forecast fields for a given forecast hour.  These ensemble fields 
@@ -120,18 +123,8 @@ class ComputeTCFields:
              vwnd = g1.read_grib_field('meridional_wind', n, inpDict).rename('v')
              logging.debug(f"  read data {n}")
 
-             uwnd.to_netcdf('wind_info.nc', mode='w', encoding=wencode, format='NETCDF3_CLASSIC')
-             vwnd.to_netcdf('wind_info.nc', mode='a', encoding=wencode, format='NETCDF3_CLASSIC')
-
-             #  Call NCL to remove TC winds, read result from file
-             os.system('ncl -Q {0}/tc_steer.ncl tclat={1} tclon={2} tcradius={3}'.format(config['script_dir'],\
-                                   str(self.ens_lat[n]), str(self.ens_lon[n]), str(tcradius)))
-
-             wfile     = nc.Dataset('wind_info.nc')
-             uwnd[:,:] = wfile.variables['u'][:,:]
-             vwnd[:,:] = wfile.variables['v'][:,:]
-
-             os.remove('wind_info.nc')
+             uwnd, vwnd = surgery.remove_TC_circulation(uwnd, vwnd, (self.ens_lat[n], self.ens_lon[n]), tcradius)
+             logging.debug(f"  surgeried {n}")
 
              #  Integrate the winds over the layer to obtain the steering wind
              pres,lat,lon = uwnd.indexes.values()
@@ -155,8 +148,8 @@ class ComputeTCFields:
                slat2 = lat2
 
              #  Write steering flow to ensemble arrays
-             uensmat[n,:,:] = np.squeeze(uint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[nlev-1]-pres[0])
-             vensmat[n,:,:] = np.squeeze(vint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[nlev-1]-pres[0])
+             uensmat[n,:,:] = np.squeeze(uint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2)).sortby(uint.latitude)) / abs(pres[nlev-1]-pres[0])
+             vensmat[n,:,:] = np.squeeze(vint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2)).sortby(uint.latitude)) / abs(pres[nlev-1]-pres[0])
 
              #  Compute the vorticity associated with the steering wind
 
