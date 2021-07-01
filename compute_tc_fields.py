@@ -113,10 +113,12 @@ class ComputeTCFields:
           wencode = {'latitude': {'dtype': 'float32'}, 'longitude': {'dtype': 'float32'}}
 
           for n in range(self.nens):
+             logging.debug(f"  Computing steering wind information {n}")
 
              #  Read global zonal and meridional wind, write to file
              uwnd = g1.read_grib_field('zonal_wind', n, inpDict).rename('u')
              vwnd = g1.read_grib_field('meridional_wind', n, inpDict).rename('v')
+             logging.debug(f"  read data {n}")
 
              uwnd.to_netcdf('wind_info.nc', mode='w', encoding=wencode, format='NETCDF3_CLASSIC')
              vwnd.to_netcdf('wind_info.nc', mode='a', encoding=wencode, format='NETCDF3_CLASSIC')

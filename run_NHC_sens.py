@@ -124,7 +124,7 @@ def main():
 
     bbnnyyyy = "{0}{1}{2}".format(bbl, storm[-3:-1], datea[0:4])
     logging.basicConfig(filename='{0}/{1}_{2}.log'.format(config.get('log_dir','.'),str(datea),storm), \
-                               filemode='w', format='%(message)s')
+                               filemode='w', format='%(asctime)s;%(message)s')
     logging.warning("STARTING SENSITIVITIES for {0} on {1}".format(bbnnyyyy, str(datea)))
 
 
@@ -137,11 +137,14 @@ def main():
                      '{0}/{1}.{2}'.format(config['work_dir'],datea,storm))
     
     #  Copy grib and ATCF data to the work directory
+    logging.info("Staging Grib Files")
     dpp.stage_grib_files(datea, config)
+    logging.info("Staging ATCF Files")
     dpp.stage_atcf_files(datea, bbnnyyyy, config)
 
 
     #  Read ATCF data into dictionary
+    logging.info("Reading ATCF Files")
     atcf = atools.ReadATCFData('{0}/atcf_*.dat'.format(config['work_dir']))
     btk = atcf.get_best_data(bbnnyyyy)
 
@@ -153,15 +156,18 @@ def main():
 
 
     #  Compute TC-related forecast metrics
+    logging.info("Computing forecast Metrics")
     fmtc.ComputeForecastMetrics(datea, storm, atcf, config)
 
 
     #  Compute forecast fields at each desired time to use in sensitivity calculation
+    logging.info("Computing TC Fiellds")
     for fhr in range(0,int(config['fcst_hour_max'])+int(config['fcst_hour_int']),int(config['fcst_hour_int'])):
-
+       logging.debug(f"Computing Sensitivity {fhr}")
        tcf.ComputeTCFields(datea, fhr, atcf, config)
 
 
+    logging.info("Computing Sensitivity")
     #  Compute sensitivity of each metric to forecast fields at earlier times, as specified by the user
     metlist = [e.strip() for e in config['sens']['metrics'].split(',')]
     for i in range(len(metlist)):
