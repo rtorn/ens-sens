@@ -273,7 +273,7 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
   ax = plt.axes(projection=ccrs.PlateCarree())
   states = NaturalEarthFeature(category="cultural", scale="50m",
                                facecolor="none",
-                               name="admin_1_states_provinces_shp")
+                               name="admin_1_states_provinces")
   ax.add_feature(states, linewidth=0.5, edgecolor="black")
   ax.coastlines('50m', linewidth=1.0)
   ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
