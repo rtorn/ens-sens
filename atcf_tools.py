@@ -35,24 +35,26 @@ class ReadATCFData:
             #  Read entire file both through pandas and ascii reading routines
             file_name = "df_{0}".format(str((f + 1000))[1:])
             file_s = file_name
-            file_name = pd.read_csv(filepath_or_buffer=atcf_data[f], header=None)
-            file_name.columns = self.cols[0:len(file_name.columns)]
             self.atcf_files.update({file_s: file_name})
             self.atcf_array.update({f: {}})
             with open(atcf_data[f], 'r') as fo:
                 data = np.array(fo.readlines())
                 total_rows = data.shape[0]
-                if total_rows == 1:
-                    if data[0][0:7] == "missing":
-                        n_lines = 0
-                    else:
-                        n_lines = total_rows
-                        n_cols = len(data[0])
+                if total_rows == 0:
+#                    if data[0][0:7] == "missing":
+                  n_lines = 0
+#                else:
+#                  n_lines = total_rows
+#                  n_cols = len(data[0])
                 else:
-                    n_lines = total_rows
-                    n_cols = len(data[0])
+                   n_lines = total_rows
+                   n_cols = len(data[0])
             fo.close()
-            
+
+            if n_lines > 0:
+              file_name = pd.read_csv(filepath_or_buffer=atcf_data[f], header=None)
+              file_name.columns = self.cols[0:len(file_name.columns)]
+
             prfhr    = -1
             ntimes   = -1
             fhrvec   = []
