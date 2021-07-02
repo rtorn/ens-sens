@@ -8,6 +8,7 @@ import cartopy
 import cartopy.crs as ccrs
 import numpy as np
 from matplotlib import colors
+from mpl_toolkits.axes_grid1 import make_axes_locatable
 from cartopy.feature import NaturalEarthFeature
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from math import radians, degrees, sin, cos, asin, acos, sqrt
@@ -107,6 +108,44 @@ def addRawin(rawinfile, plt, plotDict):
 
   except FileNotFoundError:
     pass
+
+
+def background_map(ax, lat1, lon1, lat2, lon2):
+  '''
+  Function that creates a background map for plotting.
+
+  Attributes:
+      ax    (axis):  figure axes being used for the plot
+      lat1 (float):  minimum latitude of the plot
+      lon1 (float):  minimum longitude of the plot
+      lat2 (float):  maximum latitude of the plot
+      lon2 (float):  maximum longitude of the plot
+  '''
+
+  gridInt = 5
+
+  states = NaturalEarthFeature(category="cultural", scale="50m",
+                               facecolor="none",
+                               name="admin_1_states_provinces_shp")
+  ax.add_feature(states, linewidth=0.5, edgecolor="black")
+  ax.coastlines('50m', linewidth=1.0)
+  ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
+  ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
+
+  gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
+                     linewidth=1, color='gray', alpha=0.5, linestyle='-')
+  gl.top_labels = None
+  gl.left_labels = None
+  gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lon1),10.*np.ceil(0.1*lon2)+1.,gridInt))
+  gl.xformatter = LONGITUDE_FORMATTER
+  gl.xlabel_style = {'size': 12, 'color': 'gray'}
+  gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lat1),10.*np.ceil(0.1*lat2)+1.,gridInt))
+  gl.yformatter = LATITUDE_FORMATTER
+  gl.ylabel_style = {'size': 12, 'color': 'gray'}
+
+  ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
+
+  return ax
 
 
 def computeSens(ens, evar, metric):
@@ -273,7 +312,7 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
   ax = plt.axes(projection=ccrs.PlateCarree())
   states = NaturalEarthFeature(category="cultural", scale="50m",
                                facecolor="none",
-                               name="admin_1_states_provinces_shp")
+                               name="admin_1_states_provinces")
   ax.add_feature(states, linewidth=0.5, edgecolor="black")
   ax.coastlines('50m', linewidth=1.0)
   ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
@@ -365,7 +404,7 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
   ax = plt.axes(projection=ccrs.PlateCarree())
   states = NaturalEarthFeature(category="cultural", scale="50m",
                                facecolor="none",
-                               name="admin_1_states_provinces_shp")
+                               name="admin_1_states_provinces")
   ax.add_feature(states, linewidth=0.5, edgecolor="black")
   ax.coastlines('50m', linewidth=1.0)
   ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
@@ -409,7 +448,7 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
   addDrop(plotDict.get("dropsonde_file","null"), plt, plotDict)
 
   #  Add colorbar to the plot
-  cbar = plt.colorbar(pltf, fraction=0.15, aspect=45., pad=0.04, shrink=1.0, orientation='horizontal')
+  cbar = plt.colorbar(pltf, fraction=0.10, aspect=45., pad=0.04, shrink=1.0, orientation='horizontal')
   cbar.set_ticks(compd_range[1:11])
 
   plt.savefig(fileout,format='png',dpi=120,bbox_inches='tight')
