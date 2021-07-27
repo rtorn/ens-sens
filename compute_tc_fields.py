@@ -1,5 +1,7 @@
 import os
 import logging
+import json
+import time
 import importlib
 import math
 import netCDF4 as nc
@@ -10,6 +12,7 @@ import datetime as dt
 import metpy.constants as mpcon
 import metpy.calc as mpcalc
 from metpy.units import units
+import sys
 
 class ComputeTCFields:
     '''
@@ -43,6 +46,12 @@ class ComputeTCFields:
         lon1 = float(config['fields'].get('min_lon','-180.'))
         lon2 = float(config['fields'].get('max_lon','-10.'))
 
+        if not 'min_lat' in config:
+           config.update({'min_lat': lat1})
+           config.update({'max_lat': lat2})
+           config.update({'min_lon': lon1})
+           config.update({'max_lon': lon2})
+
         self.fhr = fhr
         self.atcf_files = atcf.atcf_files
         self.config     = config       
@@ -70,13 +79,15 @@ class ComputeTCFields:
                 e_cnt = e_cnt + 1
                 m_lat = m_lat + self.ens_lat[n]
                 m_lon = m_lon + self.ens_lon[n]
-        m_lon = m_lon / e_cnt
-        m_lat = m_lat / e_cnt
 
-        for n in range(self.nens):
-            if self.ens_lat[n] == atcf.missing or self.ens_lon[n] == atcf.missing:
-                self.ens_lat[n] = m_lat
-                self.ens_lon[n] = m_lon
+        if e_cnt > 0:
+           m_lon = m_lon / e_cnt
+           m_lat = m_lat / e_cnt
+
+           for n in range(self.nens):
+              if self.ens_lat[n] == atcf.missing or self.ens_lon[n] == atcf.missing:
+                 self.ens_lat[n] = m_lat
+                 self.ens_lon[n] = m_lon
 
         #  Read grib file information for this forecast hour
         g1 = self.dpp.ReadGribFiles(self.datea_str, self.fhr, self.config)
@@ -118,18 +129,30 @@ class ComputeTCFields:
              uwnd = g1.read_grib_field('zonal_wind', n, inpDict).rename('u')
              vwnd = g1.read_grib_field('meridional_wind', n, inpDict).rename('v')
 
+#             print(uwnd[:,0,0])
+#             print(vwnd[:,0,0])
+#             sys.exit(2)
+
              uwnd.to_netcdf('wind_info.nc', mode='w', encoding=wencode, format='NETCDF3_CLASSIC')
              vwnd.to_netcdf('wind_info.nc', mode='a', encoding=wencode, format='NETCDF3_CLASSIC')
 
-             #  Call NCL to remove TC winds, read result from file
-             os.system('ncl -Q {0}/tc_steer.ncl tclat={1} tclon={2} tcradius={3}'.format(config['script_dir'],\
-                                   str(self.ens_lat[n]), str(self.ens_lon[n]), str(tcradius)))
+             latvec = uwnd.latitude.values
+             lonvec = uwnd.longitude.values
 
-             wfile     = nc.Dataset('wind_info.nc')
-             uwnd[:,:] = wfile.variables['u'][:,:]
-             vwnd[:,:] = wfile.variables['v'][:,:]
+             if e_cnt > 0:
 
-             os.remove('wind_info.nc')
+                latcen = latvec[np.abs(latvec-self.ens_lat[n]).argmin()]
+                loncen = lonvec[np.abs(lonvec-self.ens_lon[n]).argmin()]
+
+                #  Call NCL to remove TC winds, read result from file
+                os.system('ncl -Q {0}/tc_steer.ncl tclat={1} tclon={2} tcradius={3}'.format(config['script_dir'],\
+                                      str(latcen), str(loncen), str(tcradius)))
+
+                wfile     = nc.Dataset('wind_info.nc')
+                uwnd[:,:,:] = wfile.variables['u'][:,:,:]
+                vwnd[:,:,:] = wfile.variables['v'][:,:,:]
+
+                os.remove('wind_info.nc')
 
              #  Integrate the winds over the layer to obtain the steering wind
              pres,lat,lon = uwnd.indexes.values()
@@ -178,25 +201,36 @@ class ComputeTCFields:
           logging.warning("  Obtaining steering wind information from file")
 
 
-        #  Read 500 hPa geopotential height from file, if ensemble file is not present
-        outfile='{0}/{1}_f{2}_h500_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
-        if (not os.path.isfile(outfile) and config['fields'].get('calc_h500hPa','True') == 'True'):
+        #  Read geopotential height from file, if ensemble file is not present
+        if config['fields'].get('calc_height','True') == 'True':
 
-          logging.warning("  Computing 500 hPa height")
+           if 'height_levels' in config['fields']:
+              height_list = json.loads(config['fields'].get('height_levels'))
+           else:
+              height_list = [500]
 
-          vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (500, 500), 
-                   'description': '500 hPa height', 'units': 'm', '_FillValue': -9999.}
-          vDict = g1.set_var_bounds('geopotential_height', vDict)
-          ensmat = g1.create_ens_array('geopotential_height', self.nens, vDict)
+           for level in height_list:
 
-          for n in range(self.nens):
-             ensmat[n,:,:] = np.squeeze(g1.read_grib_field('geopotential_height', n, vDict))
+              levstr = '%0.3i' % int(level)
+              outfile='{0}/{1}_f{2}_h{3}hPa_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff,levstr)
 
-          ensmat.to_netcdf(outfile, encoding=dencode)
+              if not os.path.isfile(outfile):
 
-        elif os.path.isfile(outfile):
+                 logging.warning('  Computing {0} hPa height'.format(levstr))
 
-          logging.warning("  Obtaining 500 hPa height data from {0}".format(outfile))
+                 vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (level, level),
+                          'description': '{0} hPa height'.format(levstr), 'units': 'm', '_FillValue': -9999.}
+                 vDict = g1.set_var_bounds('geopotential_height', vDict)
+                 ensmat = g1.create_ens_array('geopotential_height', g1.nens, vDict)
+
+                 for n in range(g1.nens):
+                    ensmat[n,:,:] = np.squeeze(g1.read_grib_field('geopotential_height', n, vDict))
+
+                 ensmat.to_netcdf(outfile, encoding=dencode)
+
+              elif os.path.isfile(outfile):
+
+                 logging.warning("  Obtaining {0} hPa height data from {1}".format(levstr,outfile))
 
 
         #  Compute 250 hPa PV if the file does not exist
@@ -242,36 +276,53 @@ class ComputeTCFields:
           logging.warning("  Obtaining 250 hPa PV data from {0}".format(outfile))
 
 
-        #  Compute the 700 hPa equivalent potential temperature (if desired and file is missing)
-        outfile='{0}/{1}_f{2}_e700_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
-        if (not os.path.isfile(outfile) and config['fields'].get('calc_the700hPa','False') == 'True'):
+        #  Compute the equivalent potential temperature (if desired and file is missing)
+        if config['fields'].get('calc_theta-e','False') == 'True':
 
-          logging.warning("  Computing 700 hPa Theta-E")
+           if 'theta-e_levels' in config['fields']:
+              thetae_list = json.loads(config['fields'].get('theta-e_levels'))
+           else:
+              thetae_list = [700, 850]
 
-          vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (700, 700),
-                   'description': '700 hPa Equivalent Potential Temperature', 'units': 'K', '_FillValue': -9999.}
-          vDict = g1.set_var_bounds('temperature', vDict)
+           for level in thetae_list:
 
-          ensmat = g1.create_ens_array('temperature', len(self.atcf_files), vDict)
+              levstr = '%0.3i' % int(level)
+              outfile='{0}/{1}_f{2}_e{3}hPa_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff,levstr)
 
-          for n in range(self.nens):
+              if not os.path.isfile(outfile):
 
-            tmpk = np.squeeze(g1.read_grib_field('temperature', n, vDict)) * units('K')
-            relh = np.minimum(np.maximum(np.squeeze(g1.read_grib_field('relative_humidity', n, vDict)), 0.01), 100.0) * units.percent
+                 logging.warning('  Computing {0} hPa Theta-E'.format(levstr))
 
-            tdew = mpcalc.dewpoint_from_relative_humidity(tmpk, relh)
-            pres = tmpk.isobaricInhPa.values * units('hPa')
-            ensmat[n,:,:] = np.squeeze(mpcalc.equivalent_potential_temperature(pres[None, None], tmpk, tdew))
+                 vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (level, level),
+                         'description': '{0} hPa Equivalent Potential Temperature'.format(levstr), 'units': 'K', '_FillValue': -9999.}
+                 vDict = g1.set_var_bounds('temperature', vDict)
 
-          ensmat.to_netcdf(outfile, encoding=dencode)
+                 ensmat = g1.create_ens_array('temperature', g1.nens, vDict)
 
-        elif os.path.isfile(outfile):
+                 for n in range(g1.nens):
 
-          logging.warning("  Obtaining 700 hPa Theta-e data from {0}".format(outfile))
+                    tmpk = g1.read_grib_field('temperature', n, vDict) * units.K
+                    pres = tmpk.isobaricInhPa.values * units.hPa
+
+                    if g1.has_specific_humidity:
+                       qvap = np.squeeze(g1.read_grib_field('specific_humidity', n, vDict))
+                       tdew = mpcalc.dewpoint_from_specific_humidity(pres[None, None], tmpk, qvap)
+                    else:
+                       relh = g1.read_grib_field('relative_humidity', n, vDict)
+                       relh = np.minimum(np.maximum(relh, 0.01), 100.0) * units.percent
+                       tdew = mpcalc.dewpoint_from_relative_humidity(tmpk, relh)
+
+                    ensmat[n,:,:] = np.squeeze(mpcalc.equivalent_potential_temperature(pres[None, None], tmpk, tdew))
+
+                 ensmat.to_netcdf(outfile, encoding=dencode)
+
+              elif os.path.isfile(outfile):
+
+                 logging.warning("  Obtaining {0} hPa Theta-e data from {1}".format(levstr,outfile))
 
 
         #  Compute the 500-850 hPa water vapor mixing ratio (if desired and file is missing)
-        outfile='{0}/{1}_f{2}_q500-850_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
+        outfile='{0}/{1}_f{2}_q500-850hPa_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         if (not os.path.isfile(outfile) and config['fields'].get('calc_q500-850hPa','False') == 'True'):
 
           logging.warning("  Computing 500-850 hPa Water Vapor")
@@ -289,10 +340,13 @@ class ComputeTCFields:
           for n in range(self.nens):
 
             tmpk = np.squeeze(g1.read_grib_field('temperature', n, vDict)) * units('K')
-            relh[:,:,:] = np.minimum(np.maximum(g1.read_grib_field('relative_humidity', n, vDict), 0.01), 100.0) * units('percent')
-
             pres = (tmpk.isobaricInhPa.values * units.hPa).to(units.Pa)
-            qvap = mpcalc.mixing_ratio_from_relative_humidity(pres[:,None,None], tmpk, relh)
+
+            if g1.has_specific_humidity:
+               qvap = mpcalc.mixing_ratio_from_specific_humidity(g1.read_grib_field('specific_humidity', n, vDict))
+            else:
+               relh = np.minimum(np.maximum(g1.read_grib_field('relative_humidity', n, vDict), 0.01), 100.0) * units('percent')
+               qvap = mpcalc.mixing_ratio_from_relative_humidity(pres[:,None,None], tmpk, relh)
 
             #  Integrate water vapor over the pressure levels
             ensmat[n,:,:] = np.abs(np.trapz(qvap, pres, axis=0)) / mpcon.earth_gravity
@@ -302,6 +356,53 @@ class ComputeTCFields:
         elif os.path.isfile(outfile):
 
           logging.warning("  Obtaining 500-850 hPa water vapor data from {0}".format(outfile))
+
+
+        #  Compute wind-related forecast fields (if desired and file is missing)
+        if config['fields'].get('calc_winds','False') == 'True':
+
+           if 'wind_levels' in config['fields']:
+              wind_list = json.loads(config['fields'].get('wind_levels'))
+           else:
+              wind_list = [850]
+
+           for level in wind_list:
+
+              levstr = '%0.3i' % int(level)
+              ufile='{0}/{1}_f{2}_u{3}hPa_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff,levstr)
+              vfile='{0}/{1}_f{2}_v{3}hPa_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff,levstr)
+
+              if (not os.path.isfile(ufile)) or (not os.path.isfile(vfile)):
+
+                 logging.warning('  Computing {0} hPa wind information'.format(levstr))
+
+                 uDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (level, level),
+                          'description': '{0} hPa zonal wind'.format(levstr), 'units': 'm/s', '_FillValue': -9999.}
+                 uDict = g1.set_var_bounds('zonal_wind', uDict)
+
+                 uensmat = g1.create_ens_array('zonal_wind', g1.nens, uDict)
+
+                 vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2), 'isobaricInhPa': (level, level),
+                          'description': '{0} hPa meridional wind'.format(levstr), 'units': 'm/s', '_FillValue': -9999.}
+                 vDict = g1.set_var_bounds('meridional_wind', vDict)
+
+                 vensmat = g1.create_ens_array('meridional_wind', g1.nens, vDict)
+
+                 for n in range(g1.nens):
+
+                    uwnd = g1.read_grib_field('zonal_wind', n, uDict).squeeze()
+                    vwnd = g1.read_grib_field('meridional_wind', n, vDict).squeeze()
+
+                    uensmat[n,:,:] = uwnd[:,:]
+                    vensmat[n,:,:] = vwnd[:,:]
+
+                 uensmat.to_netcdf(ufile, encoding=dencode)
+                 vensmat.to_netcdf(vfile, encoding=dencode)
+
+              elif os.path.isfile(outfile):
+
+                 logging.warning("  Obtaining {0} hPa wind information from file".format(levstr))
+
 
 
 if __name__ == "__main__":
