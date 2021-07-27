@@ -2,6 +2,7 @@ import os
 import time
 import gzip
 import sys
+import warnings
 import urllib
 import datetime as dt
 import numpy as np
@@ -106,28 +107,36 @@ class ReadGribFiles:
         self.init  = dt.datetime.strptime(datea, '%Y%m%d%H')
         self.datef = self.init + dt.timedelta(hours=fhr)
 
-#        if ( member > 0 ):
-#            modid = 'p'
-#        else:
-#            modid = 'c'
-#        nn = '%0.2i' % member
-#        return '{0}/gefs{1}/ge{2}{3}_{4}z_pgrb2a'.format(self.src_path,self.datea_str[0:8],modid,nn,self.datea_str[8:10])
-        file_name = '{0}/gefs{1}/gefs_pgrb2ap5_all_{2}z'.format(config['model_dir'],datea[0:8],datea[8:10])
-        try:  
-           self.ds_dict = xr.open_dataset(file_name)
-        except IOError as exc:
-           raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
+        with warnings.catch_warnings():
+            warnings.simplefilter(
+                "ignore", category=xr.coding.variables.SerializationWarning)
 
-        file_name = '{0}/gefs{1}/gefs_pgrb2bp5_all_{2}z'.format(config['model_dir'],datea[0:8],datea[8:10])
-        try:
-           self.ds_dictb = xr.open_dataset(file_name)
-        except IOError as exc:
-           raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
+            file_name = '{0}/gefs{1}/gefs_pgrb2ap5_all_{2}z'.format(config['model_dir'], datea[0:8], datea[8:10])
+
+            try:
+                self.ds_dict = xr.open_dataset(file_name)
+            except (OSError, RuntimeError):
+                print("Read Error; Sleeping before trying again")
+                time.sleep(300)
+                self.ds_dict = xr.open_dataset(file_name)
+            except IOError as exc:
+                raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
+
+            file_name = '{0}/gefs{1}/gefs_pgrb2bp5_all_{2}z'.format(config['model_dir'], datea[0:8], datea[8:10])
+
+            try:
+                self.ds_dictb = xr.open_dataset(file_name)
+            except (OSError, RuntimeError):
+                print("Read Error; Sleeping before trying again")
+                time.sleep(300)
+                self.ds_dictb = xr.open_dataset(file_name)
+            except IOError as exc:
+                raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
 
 
         #  Put longitude into -180 to 180 format
-        self.ds_dict.coords['lon']  = (self.ds_dict.coords['lon'] + 180) % 360 - 180
-        self.ds_dictb.coords['lon'] = (self.ds_dictb.coords['lon'] + 180) % 360 - 180
+        self.ds_dict.coords['lon']  = (self.ds_dict.coords['lon'] + 180.) % 360. - 180.
+        self.ds_dictb.coords['lon'] = (self.ds_dictb.coords['lon'] + 180.) % 360. - 180.
 
         #  This is a dictionary that maps from generic variable names to the name of variable in file
         self.var_dict = {'zonal_wind': 'ugrdprs',          \
@@ -139,6 +148,8 @@ class ReadGribFiles:
                          'precipitation': 'apcpsfc' }
 
         #print(self.ds_dict)
+
+        self.has_specific_humidity = False
 
         self.nens = int(len(self.ds_dict['hgtprs'].coords['ens']))
 
@@ -169,7 +180,11 @@ class ReadGribFiles:
 
        else:
 
-          latvec = list(self.ds_dict[vname].lat.data)
+          try:
+             latvec = list(self.ds_dict[vname].lat.data)
+          except (OSError, RuntimeError):
+             time.sleep(300)
+             latvec = list(self.ds_dict[vname].lat.data) 
           vdict['lat_start'] = latvec[0]
           vdict['lat_end']   = latvec[-1]
 
@@ -180,7 +195,11 @@ class ReadGribFiles:
 
        else:
 
-          lonvec = list(self.ds_dict[vname].lon.data)
+          try:
+             lonvec = list(self.ds_dict[vname].lon.data)
+          except (OSError, RuntimeError):
+             time.sleep(300)
+             lonvec = list(self.ds_dict[vname].lon.data)
           vdict['lon_start'] = lonvec[0]
           vdict['lon_end']   = lonvec[-1]
 
@@ -219,8 +238,16 @@ class ReadGribFiles:
          attrlist['_FillValue'] = vdict['_FillValue']
 
        #  Create an empty xarray that can be used to copy data into
-       lonvec = list(self.ds_dict[self.var_dict[varname]].sel(lon=slice(vdict['lon_start'], vdict['lon_end'])).lon.data)
-       latvec = list(self.ds_dict[self.var_dict[varname]].sel(lat=slice(vdict['lat_start'], vdict['lat_end'])).lat.data)
+       try:
+          lonvec = list(self.ds_dict[self.var_dict[varname]].sel(lon=slice(vdict['lon_start'], vdict['lon_end'])).lon.data).copy()
+       except (OSError, RuntimeError):
+          time.sleep(300)
+          lonvec = list(self.ds_dict[self.var_dict[varname]].sel(lon=slice(vdict['lon_start'], vdict['lon_end'])).lon.data).copy()
+       try:
+          latvec = list(self.ds_dict[self.var_dict[varname]].sel(lat=slice(vdict['lat_start'], vdict['lat_end'])).lat.data).copy()
+       except (OSError, RuntimeError):
+          time.sleep(300)
+          latvec = list(self.ds_dict[self.var_dict[varname]].sel(lat=slice(vdict['lat_start'], vdict['lat_end'])).lat.data).copy()
        ensarr = xr.DataArray(name='ensemble_data', data=np.zeros([nens, len(latvec), len(lonvec)]),
                              dims=['ensemble', 'latitude', 'longitude'], attrs=attrlist, 
                              coords={'ensemble': [i for i in range(nens)], 'latitude': latvec, 'longitude': lonvec}) 
@@ -245,51 +272,93 @@ class ReadGribFiles:
            vdict     (dict):  The dictionary object with variable information
        '''
 
-       vname = self.var_dict[varname]
+       with warnings.catch_warnings():
 
-       #  Read a single pressure level of data, if this is a variable that has pressure levels
-       if 'isobaricInhPa' in vdict:
+          warnings.simplefilter("ignore", category=xr.coding.variables.SerializationWarning)
 
-          #  Rename the lat, lon, and pressure arrays to common convention
-          vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
-                                          lon=slice(vdict['lon_start'], vdict['lon_end']),   \
-                                          lev=slice(vdict['pres_start'], vdict['pres_end']), \
-                                          time=slice(self.datef, self.datef),                \
-                                          ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+          vname = self.var_dict[varname]
 
-          if vdict['pres_start'] != vdict['pres_end']:
+          #  Read a single pressure level of data, if this is a variable that has pressure levels
+          if 'isobaricInhPa' in vdict:
 
-             for k in range(len(vout[:,0,0])):
+             #  Rename the lat, lon, and pressure arrays to common convention
+             try:
+                vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                                time=slice(self.datef, self.datef),                \
+                                                ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
+             except (OSError, RuntimeError):
+                print("Read Field Error; Sleeping before trying again")
+                time.sleep(300)      
+                vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                                time=slice(self.datef, self.datef),                \
+                                                ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
 
-                if np.isnan(vout[k,0,0]):
 
-                   vout[k,:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
-                                              lon=slice(vdict['lon_start'], vdict['lon_end']),   \
-                                              lev=slice(vout.isobaricInhPa.values[k], vout.isobaricInhPa.values[k]), \
-                                              time=slice(self.datef, self.datef),                \
-                                              ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+             if vdict['pres_start'] != vdict['pres_end']:
 
+                for k in range(len(vout[:,0,0])):
+
+                   if np.isnan(vout[k,0,0]):
+
+                      try:
+                         vout[k,:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                    lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                    lev=slice(vout.isobaricInhPa.values[k], vout.isobaricInhPa.values[k]), \
+                                                    time=slice(self.datef, self.datef),                \
+                                                    ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
+                      except (OSError, RuntimeError):
+                         print("Read Field Error; Sleeping before trying again")
+                         time.sleep(300)
+                         vout[k,:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                    lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                    lev=slice(vout.isobaricInhPa.values[k], vout.isobaricInhPa.values[k]), \
+                                                    time=slice(self.datef, self.datef),                \
+                                                    ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
+
+             else:
+
+                if np.isnan(vout[0,0]):
+
+                   try:
+                      vout[:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                               lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                               lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                               time=slice(self.datef, self.datef),                \
+                                               ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
+                   except (OSError, RuntimeError):
+                      print("Read Field Error; Sleeping before trying again")
+                      time.sleep(300)
+                      vout[:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                               lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                               lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                               time=slice(self.datef, self.datef),                \
+                                               ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
+
+
+          #  Read the only level if it is a single level variable
           else:
 
-             if np.isnan(vout[0,0]):
+             aout = self.ds_dict[vname].sel(ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'})
 
-                vout[:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
-                                         lon=slice(vdict['lon_start'], vdict['lon_end']),   \
-                                         lev=slice(vdict['pres_start'], vdict['pres_end']), \
-                                         time=slice(self.datef, self.datef),                \
-                                         ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+             #  Rename the lat and lon arrays to common convention
+             try:
+                vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']), \
+                                                lon=slice(vdict['lon_start'], vdict['lon_end']), \
+                                                time=slice(self.datef, self.datef),              \
+                                                ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'}).copy(deep=True)
+             except (OSError, RuntimeError):
+                print("Read 2D Field Error; Sleeping before trying again") 
+                time.sleep(300)
+                vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']), \
+                                                lon=slice(vdict['lon_start'], vdict['lon_end']), \
+                                                time=slice(self.datef, self.datef),              \
+                                                ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'}).copy(deep=True)
 
-
-       #  Read the only level if it is a single level variable
-       else:
-
-          #  Rename the lat and lon arrays to common convention
-          vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']), \
-                                          lon=slice(vdict['lon_start'], vdict['lon_end']), \
-                                          time=slice(self.datef, self.datef),              \
-                                          ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'})
-
-       return(vout)
+          return(vout)
 
 
     @staticmethod
