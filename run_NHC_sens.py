@@ -202,9 +202,7 @@ def main():
 
     tarout = '{0}/{1}.tar'.format(config['outgrid_dir'],datea) 
     if ( os.path.isfile(tarout) and tarfile.is_tarfile(tarout) ):
-       tar = tarfile.open(tarout) 
-       tar.extractall()
-       tar.close()
+       os.system('tar --skip-old-files -xf {0}'.format(tarout))
 
     for f in ['usteer', 'vsteer', 'masteer', 'misteer']:
        for g in glob.glob('{0}/{1}.{2}/*_intmajtrack/sens/{3}/*.nc'.format(config['work_dir'],datea,storm,f)): 
