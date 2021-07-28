@@ -1,18 +1,6 @@
 \documentclass[psfig,12pt]{article}
-\newif\ifpdf
-   \ifx\pdfoutput\undefined
-   \pdffalse % we are not running PDFLaTeX
-   \else
-   \pdfoutput=1 % we are running PDFLaTeX
-   \pdftrue
-\fi
 
-\ifpdf
-   \usepackage[pdftex]{graphicx}
-   \else
-   \usepackage{graphicx}
-\fi
-
+\usepackage{graphicx}
 \usepackage{amssymb}
 \usepackage[T1]{fontenc}
 \usepackage{times}
@@ -204,11 +192,20 @@ Assumes the file has the format \{yyyymmddhh\}\_\{storm\}\_precip.  No default v
 Parameter Name & Type & Description \\ \hline \hline
 calc\_steer\_circ & logical & True to compute the circulation/vorticity from the steering wind.  
 Default:  False \\ \hline
+calc\_height & logical & True to compute gepotential height on specified pressure levels.  Default:  True \\ \hline
+height\_levels & float & List of pressure levels to compute the geopotential height.
+Default:  500 \\ \hline
 calc\_pv250hPa & logical & True to compute PV on the 250 hPa surface.  Default:  True \\ \hline
-calc\_the700hPa & logical & True to compute 700 hPa equivalent potential temperature.  
+calc\_theta-e & logical & True to compute equivalent potential temperature at specified pressure levels.
 Default:  False \\ \hline
+theta-e\_levels & float & List of pressure levels to compute equivalent potential temperature.
+Default:  700, 850 \\ \hline
 calc\_q500-850hPa & logical & True to compute the integrated water vapor between 500 and 
 850~hPa.  Default:  False \\ \hline
+calc\_winds & logical & True to compute zonal and meridional wind at specified pressure levels.
+Default:  False \\ \hline
+wind\_levels & float & List of pressure levels to compute zonal and meridional wind.
+Default:  850 \\ \hline
 min\_lat & float & Minimum latitude to compute forecast fields over.  Default:  0.0 \\ \hline
 max\_lat & float & Maximum latitude to compute forecast fields over.  Default:  65.0 \\ \hline
 min\_lon & float & Minimum longitude to compute forecast fields over.  Default:  -180.0 \\ \hline
