@@ -110,45 +110,70 @@ def addRawin(rawinfile, plt, plotDict):
     pass
 
 
-def background_map(ax, lat1, lon1, lat2, lon2):
+def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
   '''
   Function that creates a background map for plotting.
 
   Attributes:
-      ax    (axis):  figure axes being used for the plot
-      lat1 (float):  minimum latitude of the plot
-      lon1 (float):  minimum longitude of the plot
-      lat2 (float):  maximum latitude of the plot
-      lon2 (float):  maximum longitude of the plot
+      proj (string):  String that contains name of projection for plot
+      lon1 (float):   minimum longitude of the plot
+      lon2 (float):   maximum longitude of the plot
+      lat1 (float):   minimum latitude of the plot
+      lat2 (float):   maximum latitude of the plot
+      DomDict(dict.):  Dictionary that contains plot preferences
   '''
 
-  gridInt = 5
+  if proj == 'NorthPolarStereo':
+     projection = ccrs.NorthPolarStereo(central_longitude=0.0)
+  else:
+     ax = plt.axes(projection=ccrs.PlateCarree())
 
   states = NaturalEarthFeature(category="cultural", scale="50m",
-                               facecolor="none",
-                               name="admin_1_states_provinces_shp")
+                               facecolor="none", name="admin_1_states_provinces")
   ax.add_feature(states, linewidth=0.5, edgecolor="black")
   ax.coastlines('50m', linewidth=1.0)
   ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
   ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
 
-  gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
-                     linewidth=1, color='gray', alpha=0.5, linestyle='-')
-  gl.top_labels = None
-  gl.left_labels = None
-  gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lon1),10.*np.ceil(0.1*lon2)+1.,gridInt))
-  gl.xformatter = LONGITUDE_FORMATTER
-  gl.xlabel_style = {'size': 12, 'color': 'gray'}
-  gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lat1),10.*np.ceil(0.1*lat2)+1.,gridInt))
-  gl.yformatter = LATITUDE_FORMATTER
-  gl.ylabel_style = {'size': 12, 'color': 'gray'}
+  if proj == 'NorthPolarStereo':
 
-  ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
+     ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
+
+     # specifying xlocs/ylocs yields number of meridian/parallel lines
+     dmeridian = float(DomDict.get('grid_lon', 30))  # spacing for lines of meridian
+     dparallel = float(DomDict.get('grid_lat', 10))  # spacing for lines of parallel 
+     num_merid = 360/dmeridian + 1
+     num_parra = 30/dparallel + 1
+     gl = ax.gridlines(crs=ccrs.PlateCarree(), xlocs=np.linspace(-180, 180, int(num_merid)),
+            ylocs=np.linspace(60, 90, int(num_parra)), linestyle="-", linewidth=1, color='gray', alpha=0.5)
+
+     theta = np.linspace(0, 2*np.pi, 120)
+     verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+     center, radius = [0.5, 0.5], 0.5
+     circle = mpath.Path(verts * radius + center)
+
+     ax.set_boundary(circle, transform=ax.transAxes)  #without this; get rect bound 
+
+  else:
+
+     gridInt = float(DomDict.get('grid_interval', 10.))
+
+     gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
+                     linewidth=1, color='gray', alpha=0.5, linestyle='-')
+     gl.top_labels = None
+     gl.left_labels = None
+     gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lon1),10.*np.ceil(0.1*lon2)+1.,gridInt))
+     gl.xformatter = LONGITUDE_FORMATTER
+     gl.xlabel_style = {'size': 12, 'color': 'gray'}
+     gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lat1),10.*np.ceil(0.1*lat2)+1.,gridInt))
+     gl.yformatter = LATITUDE_FORMATTER
+     gl.ylabel_style = {'size': 12, 'color': 'gray'}
+
+     ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
 
   return ax
 
-
-def computeSens(ens, evar, metric):
+def computeSens(ens, emea, evar, metric):
   '''
   Function that computes the sensitivity of the forecast metric to the provided
   field using the ensemble-based sensitivity technique and the confidence bounds 
@@ -164,15 +189,15 @@ def computeSens(ens, evar, metric):
   sigv = np.zeros(evar.shape)
   nens = len(metric)
 
-  for i in range(len(evar[0,:])):
-    for j in range(len(evar[:,0])):
+  for n in range(nens):
+    ens[n,:,:] = ens[n,:,:] - emea[:,:]
+    sens[:,:] = sens[:,:] + ens[n,:,:]*metric[n] 
+  sens[:,:] = sens[:,:] / (float(nens-1) * evar[:,:])
 
-      #  Remove mean, compute regression, and t value
-      ens[:,j,i] = ens[:,j,i] - np.mean(ens[:,j,i],axis=0)
-      sens[j,i]  = np.sum(ens[:,j,i]*metric[:]) / (float(nens-1) * evar[j,i])
-      sy         = sum((metric[:]-sens[j,i]*ens[:,j,i])**2)
-      sy         = np.sqrt(sy / float(nens-2)) / np.sqrt(evar[j,i]*float(nens-1))
-      sigv[j,i]  = abs(sens[j,i]) / sy
+  for n in range(nens):
+    sigv[:,:] = sigv[:,:] + (metric[n]-sens[:,:]*ens[n,:,:])**2
+  sigv[:,:] = np.sqrt(sigv[:,:] / float(nens-2)) / np.sqrt(evar[:,:]*float(nens-1))
+  sigv[:,:] = abs(sens[:,:]) / sigv[:,:]
 
   return sens, sigv
 
@@ -309,27 +334,7 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
   #  Create basic figure, including political boundaries and grid lines
   fig = plt.figure(figsize=plotDict.get('figsize',(11,8.5)))
 
-  ax = plt.axes(projection=ccrs.PlateCarree())
-  states = NaturalEarthFeature(category="cultural", scale="50m",
-                               facecolor="none",
-                               name="admin_1_states_provinces")
-  ax.add_feature(states, linewidth=0.5, edgecolor="black")
-  ax.coastlines('50m', linewidth=1.0)
-  ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
-  ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
-
-  gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
-                    linewidth=1, color='gray', alpha=0.5, linestyle='-')
-  gl.top_labels = None
-  gl.left_labels = None
-  gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLon),10.*np.ceil(0.1*maxLon)+1.,gridInt))
-  gl.xformatter = LONGITUDE_FORMATTER
-  gl.xlabel_style = {'size': 12, 'color': 'gray'}
-  gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLat),10.*np.ceil(0.1*maxLat)+1.,gridInt))
-  gl.yformatter = LATITUDE_FORMATTER
-  gl.ylabel_style = {'size': 12, 'color': 'gray'}
-
-  ax.set_extent([minLon, maxLon, minLat, maxLat], ccrs.PlateCarree())
+  ax = background_map(plotDict.get('projection', 'PlateCarree'), minLon, maxLon, minLat, maxLat, plotDict)
 
   addRawin(plotDict.get("rawinsonde_file","null"), plt, plotDict)
 
@@ -401,27 +406,7 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
   #  Create basic figure, including political boundaries and grid lines
   fig = plt.figure(figsize=plotDict.get('figsize',(11,8.5)))
 
-  ax = plt.axes(projection=ccrs.PlateCarree())
-  states = NaturalEarthFeature(category="cultural", scale="50m",
-                               facecolor="none",
-                               name="admin_1_states_provinces")
-  ax.add_feature(states, linewidth=0.5, edgecolor="black")
-  ax.coastlines('50m', linewidth=1.0)
-  ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
-  ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
-
-  gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
-                    linewidth=1, color='gray', alpha=0.5, linestyle='-')
-  gl.top_labels = None
-  gl.left_labels = None
-  gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLon),10.*np.ceil(0.1*maxLon)+1.,gridInt))
-  gl.xformatter = LONGITUDE_FORMATTER
-  gl.xlabel_style = {'size': 12, 'color': 'gray'}
-  gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLat),10.*np.ceil(0.1*maxLat)+1.,gridInt))
-  gl.yformatter = LATITUDE_FORMATTER
-  gl.ylabel_style = {'size': 12, 'color': 'gray'}
-
-  ax.set_extent([minLon, maxLon, minLat, maxLat], ccrs.PlateCarree())
+  ax = background_map(plotDict.get('projection', 'PlateCarree'), minLon, maxLon, minLat, maxLat, plotDict)
 
   addRawin(plotDict.get("rawinsonde_file","null"), plt, plotDict)
 

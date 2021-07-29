@@ -1217,7 +1217,7 @@ class ComputeForecastMetrics:
                      "#E7C000", "#FF9000", "#FF0000", "#D60000", "#C00000", "#FF00FF", "#9955C9")
 
         ax1 = plt.subplot(1, 2, 1, projection=ccrs.PlateCarree())
-        ax1 = background_map(ax1, lat1, lon1, lat2, lon2)
+        ax1 = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, self.config['metric'])
 
         #  Plot the ensemble-mean precipitation on the left panel
         mpcp = [0.0, 0.25, 0.50, 1., 1.5, 2., 4., 6., 8., 12., 16., 24., 32., 64., 96., 97.]
@@ -1231,7 +1231,7 @@ class ComputeForecastMetrics:
         plt.title('Mean')
 
         ax2 = plt.subplot(1, 2, 2, projection=ccrs.PlateCarree())
-        ax2 = background_map(ax2, lat1, lon1, lat2, lon2)
+        ax2 = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, self.config['metric'])
 
         #  Plot the ensemble standard deviation precipitation on the right panel
         spcp = [0., 3., 6., 9., 12., 15., 18., 21., 24., 27., 30., 33., 36., 39., 42., 43.]
@@ -1360,7 +1360,7 @@ class ComputeForecastMetrics:
         colorlist = ("#FFFFFF", "#00ECEC", "#01A0F6", "#00BFFF", "#00FF00", "#00C800", "#009000", "#FFFF00", \
                      "#E7C000", "#FF9000", "#FF0000", "#D60000", "#C00000", "#FF00FF", "#9955C9")
 
-        ax = background_map(plt.axes(projection=ccrs.PlateCarree()), lat1, lon1, lat2, lon2)
+        ax = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, self.config['metric'])
 
         mpcp = [0.0, 0.25, 0.50, 1., 1.5, 2., 4., 6., 8., 12., 16., 24., 32., 64., 96., 97.]
         norm = matplotlib.colors.BoundaryNorm(mpcp,len(mpcp))
@@ -1483,7 +1483,7 @@ class ComputeForecastMetrics:
         colorlist = ("#FFFFFF", "#00ECEC", "#01A0F6", "#00BFFF", "#00FF00", "#00C800", "#009000", "#FFFF00", \
                      "#E7C000", "#FF9000", "#FF0000", "#D60000", "#C00000", "#FF00FF", "#9955C9")
 
-        ax = background_map(plt.axes(projection=ccrs.PlateCarree()), lat1, lon1, lat2, lon2)
+        ax = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, self.config['metric'])
 
         mwnd = [0.0, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 100, 110]
         norm = matplotlib.colors.BoundaryNorm(mwnd,len(mwnd))
