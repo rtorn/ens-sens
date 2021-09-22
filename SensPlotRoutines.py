@@ -9,6 +9,7 @@ import cartopy.crs as ccrs
 import numpy as np
 from matplotlib import colors
 from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.path as mpath
 from cartopy.feature import NaturalEarthFeature
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from math import radians, degrees, sin, cos, asin, acos, sqrt
@@ -124,7 +125,7 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
   '''
 
   if proj == 'NorthPolarStereo':
-     projection = ccrs.NorthPolarStereo(central_longitude=0.0)
+     ax = plt.axes(projection=ccrs.NorthPolarStereo(central_longitude=0.0))
   else:
      ax = plt.axes(projection=ccrs.PlateCarree())
 
@@ -137,7 +138,7 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
 
   if proj == 'NorthPolarStereo':
 
-     ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
+     ax.set_extent([lon1, lon2, lat2, lat1], ccrs.PlateCarree())
 
      # specifying xlocs/ylocs yields number of meridian/parallel lines
      dmeridian = float(DomDict.get('grid_lon', 30))  # spacing for lines of meridian
@@ -342,10 +343,10 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
   if plotDict.get('zero_non_sig_sens','False') == 'True':
      sens[sigv < 2.007] = 0.
 
-  pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both')
-  pltm = plt.contour(lon[:],lat[:],emea,plotDict.get('meanCntrs'),linewidths=1.5, colors='k', zorder=10)
-  plts = plt.contour(lon[:],lat[:],sigv,[-2.007, 2.007], linewidths=1.0, colors='k')
-  plth = plt.contourf(lon[:],lat[:],sigv,[-2.007, 2.007],hatches=['..', None, '..'], colors='none', extend='both')
+  pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both',transform=ccrs.PlateCarree())
+  pltm = plt.contour(lon[:],lat[:],emea,plotDict.get('meanCntrs'),linewidths=1.5, colors='k', zorder=10,transform=ccrs.PlateCarree())
+  plts = plt.contour(lon[:],lat[:],sigv,[-2.007, 2.007], linewidths=1.0, colors='k',transform=ccrs.PlateCarree())
+  plth = plt.contourf(lon[:],lat[:],sigv,[-2.007, 2.007],hatches=['..', None, '..'], colors='none', extend='both',transform=ccrs.PlateCarree())
 
   if 'plotTitle' in plotDict:
     plt.title(plotDict['plotTitle'])
@@ -414,10 +415,11 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
   if plotDict.get('zero_non_sig_sens','False') == 'True':
      sens[sigv < 2.007] = 0.
 
-  pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both')
-  pltm = plt.barbs(lon[::barbInt], lat[::barbInt], umea[::barbInt,::barbInt]*1.94, vmea[::barbInt,::barbInt]*1.94, pivot='middle', length=6, linewidths=0.2, zorder=10)
-  plts = plt.contour(lon[:],lat[:],sigv,[-2.007, 2.007], linewidths=0.5, colors='k')
-  plth = plt.contourf(lon[:],lat[:],sigv,[-2.007, 2.007],hatches=['..', None, '..'], colors='none', extend='both')
+  pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both',transform=ccrs.PlateCarree())
+  pltm = plt.barbs(lon[::barbInt], lat[::barbInt], umea[::barbInt,::barbInt]*1.94, vmea[::barbInt,::barbInt]*1.94, \
+                    pivot='middle', length=6, linewidths=0.2, zorder=10, transform=ccrs.PlateCarree())
+  plts = plt.contour(lon[:],lat[:],sigv,[-2.007, 2.007], linewidths=0.5, colors='k', transform=ccrs.PlateCarree())
+  plth = plt.contourf(lon[:],lat[:],sigv,[-2.007, 2.007],hatches=['..', None, '..'], colors='none', extend='both', transform=ccrs.PlateCarree())
 
   if 'plotTitle' in plotDict:
     plt.title(plotDict['plotTitle'])
