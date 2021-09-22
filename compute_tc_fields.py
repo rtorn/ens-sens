@@ -12,7 +12,7 @@ import datetime as dt
 import metpy.constants as mpcon
 import metpy.calc as mpcalc
 from metpy.units import units
-import sys
+import surgery
 import grid_calc
 
 class ComputeTCFields:
@@ -131,26 +131,15 @@ class ComputeTCFields:
              uwnd = g1.read_grib_field('zonal_wind', n, inpDict).rename('u')
              vwnd = g1.read_grib_field('meridional_wind', n, inpDict).rename('v')
 
-             uwnd.to_netcdf('wind_info.nc', mode='w', encoding=wencode, format='NETCDF3_CLASSIC')
-             vwnd.to_netcdf('wind_info.nc', mode='a', encoding=wencode, format='NETCDF3_CLASSIC')
-
-             latvec = uwnd.latitude.values
-             lonvec = uwnd.longitude.values
+#             latvec = uwnd.latitude.values
+#             lonvec = uwnd.longitude.values
 
              if e_cnt > 0:
 
-                latcen = latvec[np.abs(latvec-self.ens_lat[n]).argmin()]
-                loncen = lonvec[np.abs(lonvec-self.ens_lon[n]).argmin()]
+#                latcen = latvec[np.abs(latvec-self.ens_lat[n]).argmin()]
+#                loncen = lonvec[np.abs(lonvec-self.ens_lon[n]).argmin()]
 
-                #  Call NCL to remove TC winds, read result from file
-                os.system('ncl -Q {0}/tc_steer.ncl tclat={1} tclon={2} tcradius={3}'.format(config['script_dir'],\
-                                      str(latcen), str(loncen), str(tcradius)))
-
-                wfile     = nc.Dataset('wind_info.nc')
-                uwnd[:,:,:] = wfile.variables['u'][:,:,:]
-                vwnd[:,:,:] = wfile.variables['v'][:,:,:]
-
-                os.remove('wind_info.nc')
+                uwnd, vwnd = surgery.remove_TC_circulation(uwnd, vwnd, (self.ens_lat[n], self.ens_lon[n]), tcradius)
 
              #  Integrate the winds over the layer to obtain the steering wind
              pres,lat,lon = uwnd.indexes.values()
