@@ -4,6 +4,7 @@ import sys
 import netCDF4 as nc
 import xarray as xr
 import numpy as np
+import datetime as dt
 from SensPlotRoutines import plotVecSens, plotScalarSens, computeSens, writeSensFile
 import time
 
@@ -108,10 +109,12 @@ class ComputeSensitivity:
         lon1 = config['min_lon']
         lon2 = config['max_lon']
 
-#      init   = dt.datetime.strptime(datea, '%Y%m%d%H')
-#      datef   = init + dt.timedelta(hours=fhr)
-#      datef_s = datef.strftime("%m%d%H%M")
-#      plotDict['
+      init   = dt.datetime.strptime(datea, '%Y%m%d%H')
+      datef   = init + dt.timedelta(hours=fhr)
+      datef_s = datef.strftime("%Y%m%d%H")
+      if 'dropsonde_file' in plotDict:
+         plotDict['dropsonde_file'] = plotDict['dropsonde_file'].format(datef_s)
+         stceDict['dropsonde_file'] = stceDict['dropsonde_file'].format(datef_s)
 
       #  Obtain the metric information (here read from file)
       try:
@@ -225,6 +228,35 @@ class ComputeSensitivity:
           os.makedirs(outdir)
 
         plotVecSens(lat, lon, sens, umea, vmea, sigv, '{0}/{1}_f{2}_masteer_sens.png'.format(outdir,datea,fhrt), stceDict)
+
+
+      #  Read 250 hPa PV, compute sensitivity to that field, if the file exists
+      ensfile = '{0}/{1}_f{2}_csteer_ens.nc'.format(config['work_dir'],datea,fhrt)
+      ds = xr.open_dataset(ensfile)
+      ens = ds.ensemble_data.sel(latitude=slice(lat1, lat2), longitude=slice(lon1, lon2)).squeeze()
+      lat = ens.latitude.values
+      lon = ens.longitude.values
+      emea  = np.mean(ens, axis=0)
+      emea.attrs['units'] = ds.ensemble_data.attrs['units']
+      evar = np.var(ens, axis=0)
+
+      sens, sigv = computeSens(ens, emea, evar, metric)
+      sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
+
+      outdir = '{0}/{1}.{2}/{3}/sens/csteer'.format(config['work_dir'],datea,config['storm'],metname)
+      if not os.path.isdir(outdir):
+         os.makedirs(outdir)
+
+      plotDict['meanCntrs'] = np.array([-5.0, -4.0, -3.0, -2.0, -1.5, -1.0, -0.5, 0.5, 1.0, 1.5, 2.0, 3.0, 4.0, 5.0])
+      plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_csteer_sens.png'.format(outdir,datea,fhrt), plotDict)
+
+      if e_cnt > 0:
+        outdir = '{0}/{1}.{2}/{3}/sens_sc/csteer'.format(config['work_dir'],datea,config['storm'],metname)
+        if not os.path.isdir(outdir):
+          os.makedirs(outdir)
+
+        stceDict['meanCntrs'] = plotDict['meanCntrs']
+        plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_csteer_sens.png'.format(outdir,datea,fhrt), stceDict)
 
 
       #  Read 250 hPa PV, compute sensitivity to that field, if the file exists
@@ -396,5 +428,14 @@ class ComputeSensitivity:
 
          plotDict['meanCntrs'] = np.arange(4, 40, 4)
          plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_q500-850hPa_sens.png'.format(outdir,datea,fhrt), plotDict)
+
+         if e_cnt > 0:
+            outdir = '{0}/{1}.{2}/{3}/sens_sc/q500-850hPa'.format(config['work_dir'],datea,config['storm'],metname)
+            if not os.path.isdir(outdir):
+               os.makedirs(outdir)
+
+            stceDict['meanCntrs'] = plotDict['meanCntrs']
+            plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_q500-850hPa_sens.png'.format(outdir,datea,fhrt), stceDict)
+
 
 

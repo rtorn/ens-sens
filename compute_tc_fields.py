@@ -13,6 +13,7 @@ import metpy.constants as mpcon
 import metpy.calc as mpcalc
 from metpy.units import units
 import sys
+import grid_calc
 
 class ComputeTCFields:
     '''
@@ -98,6 +99,7 @@ class ComputeTCFields:
         #  Compute steering wind components
         uoutfile='{0}/{1}_f{2}_usteer_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         voutfile='{0}/{1}_f{2}_vsteer_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
+        vortfile='{0}/{1}_f{2}_csteer_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         if (not os.path.isfile(uoutfile) or not os.path.isfile(voutfile)) and config['fields'].get('calc_uvsteer','True') == 'True':
 
           logging.warning("  Computing steering wind information")
@@ -128,10 +130,6 @@ class ComputeTCFields:
              #  Read global zonal and meridional wind, write to file
              uwnd = g1.read_grib_field('zonal_wind', n, inpDict).rename('u')
              vwnd = g1.read_grib_field('meridional_wind', n, inpDict).rename('v')
-
-#             print(uwnd[:,0,0])
-#             print(vwnd[:,0,0])
-#             sys.exit(2)
 
              uwnd.to_netcdf('wind_info.nc', mode='w', encoding=wencode, format='NETCDF3_CLASSIC')
              vwnd.to_netcdf('wind_info.nc', mode='a', encoding=wencode, format='NETCDF3_CLASSIC')
@@ -183,18 +181,21 @@ class ComputeTCFields:
                slat2 = lat2
 
              #  Write steering flow to ensemble arrays
-             uensmat[n,:,:] = np.squeeze(uint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[-1]-pres[0])
-             vensmat[n,:,:] = np.squeeze(vint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[-1]-pres[0])
+             usteer = np.squeeze(uint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[-1]-pres[0])
+             vsteer = np.squeeze(vint.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) / abs(pres[-1]-pres[0])
+             uensmat[n,:,:] = usteer[:,:]
+             vensmat[n,:,:] = vsteer[:,:]
 
              #  Compute the vorticity associated with the steering wind
-
-#             circ = VectorWind(unew, vnew).vorticity() * 1.0e5
-
-#             vortmat[n,:,:] = np.squeeze(circ.sel(latitude=slice(lat2, lat1), longitude=slice(lon1, lon2)))
+             lat  = usteer.latitude.values
+             lon  = usteer.longitude.values
+             dx, dy = mpcalc.lat_lon_grid_deltas(lon, lat, x_dim=-1, y_dim=-2, geod=None)
+             vort = mpcalc.vorticity(usteer * units('m / sec'), vsteer * units('m / sec'), dx=dx, dy=dy)
+             vortmat[n,:,:] = grid_calc.calc_circ_llgrid(vort, 500., lat, lon, False, len(lon), len(lat)) * 1.0e5
 
           uensmat.to_netcdf(uoutfile, encoding=dencode)
           vensmat.to_netcdf(voutfile, encoding=dencode) 
-#          vortmat.to_netcdf(vortfile, encoding=dencode)
+          vortmat.to_netcdf(vortfile, encoding=dencode)
 
         else:
 

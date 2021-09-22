@@ -564,7 +564,7 @@ class ComputeForecastMetrics:
 
         logging.warning('  Computing time-integrated track metric')
 
-        halfens = int(0.5*float(self.nens))
+        ens_min = int(float(self.config['metric'].get('track_eof_member_frac', 0.5))*float(self.nens))
 
         ellfreq = 24.0
 
@@ -594,8 +594,8 @@ class ComputeForecastMetrics:
                 m_lat_t = m_lat_t + lat[n]
                 m_lon_t = m_lon_t + lon[n]
 
-           #  Only consider this time if at least half of members are present
-           if e_cnt >= halfens:
+           #  Only consider this time if a critical number of members are present
+           if e_cnt >= ens_min:
 
               m_lon_t = m_lon_t / e_cnt
               m_lat_t = m_lat_t / e_cnt
@@ -646,7 +646,7 @@ class ComputeForecastMetrics:
               m_lon[t] = m_lon[t] / e_cnt
               m_lat[t] = m_lat[t] / e_cnt
 
-              if e_cnt >= halfens:
+              if e_cnt >= ens_min:
 
                  for n in range(self.nens):
                     if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
@@ -896,7 +896,7 @@ class ComputeForecastMetrics:
 
         logging.warning('  Computing time-integrated intensity metric')
 
-        halfens = int(0.5*float(self.nens))
+        ens_min = int(float(self.config['metric'].get('intensity_eof_member_frac', 0.5))*float(self.nens))
 
         esign=1.0
 
@@ -923,7 +923,7 @@ class ComputeForecastMetrics:
                 m_slp_t = m_slp_t + slp[n]
 
            #   Only consider times where at least half of members have storm for EOF
-           if e_cnt >= halfens:
+           if e_cnt >= ens_min:
 
               m_slp_t = m_slp_t / e_cnt
               tt      = tt + 1
@@ -1397,7 +1397,7 @@ class ComputeForecastMetrics:
                              'data_vars': {'fore_met_init': {'dims': ('num_ens',),
                                                             'attrs': {'units': '',
                                                                       'description': 'precipitation PC'},
-                                                            'data': pc1}}}
+                                                            'data': pc1.data}}}
 
         xr.Dataset.from_dict(f_met_pcpeof_nc).to_netcdf(
             "{0}/{1}_f{2}_pcpeof.nc".format(self.outdir,str(self.datea_str),'%0.3i' % fhr2), encoding={'fore_met_init': {'dtype': 'float32'}})
@@ -1520,7 +1520,7 @@ class ComputeForecastMetrics:
                              'data_vars': {'fore_met_init': {'dims': ('num_ens',),
                                                             'attrs': {'units': '',
                                                                       'description': 'wind speed PC'},
-                                                            'data': pc1}}}
+                                                            'data': pc1.data}}}
 
         xr.Dataset.from_dict(f_met_wndeof_nc).to_netcdf(
             "{0}/{1}_f{2}_wndeof.nc".format(self.outdir,str(self.datea_str),'%0.3i' % fhr2), encoding={'fore_met_init': {'dtype': 'float32'}})
