@@ -126,6 +126,8 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
 
   if proj == 'NorthPolarStereo':
      ax = plt.axes(projection=ccrs.NorthPolarStereo(central_longitude=0.0))
+  elif (lon1 < 180. and lon2 > 180.):
+     ax = plt.axes(projection=ccrs.PlateCarree(central_longitude=180.))
   else:
      ax = plt.axes(projection=ccrs.PlateCarree())
 
@@ -157,22 +159,23 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
 
   else:
 
+     ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
+
      gridInt = float(DomDict.get('grid_interval', 10.))
 
      gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
                      linewidth=1, color='gray', alpha=0.5, linestyle='-')
      gl.top_labels = None
      gl.left_labels = None
-     gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lon1),10.*np.ceil(0.1*lon2)+1.,gridInt))
+     gl.xlocator = mticker.FixedLocator(np.arange(-180.,180.,gridInt))
      gl.xformatter = LONGITUDE_FORMATTER
      gl.xlabel_style = {'size': 12, 'color': 'gray'}
-     gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lat1),10.*np.ceil(0.1*lat2)+1.,gridInt))
+     gl.ylocator = mticker.FixedLocator(np.arange(-90.+gridInt,90.,gridInt))
      gl.yformatter = LATITUDE_FORMATTER
      gl.ylabel_style = {'size': 12, 'color': 'gray'}
 
-     ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
-
   return ax
+
 
 def computeSens(ens, emea, evar, metric):
   '''
@@ -318,6 +321,9 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
       plotDict (dict.):  Dictionary that contains configuration options
   '''
 
+#  if np.max(lon) > 180.:
+#     lon[:] = (lon[:] + 180.) % 360. - 180.
+
   minLat = float(plotDict.get('min_lat', np.amin(lat)))
   maxLat = float(plotDict.get('max_lat', np.amax(lat)))
   minLon = float(plotDict.get('min_lon', np.amin(lon)))
@@ -364,7 +370,7 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
   #  Add colorbar to the plot
   cbar = plt.colorbar(pltf, fraction=0.15, aspect=45., pad=0.04, orientation='horizontal')
   cbar.set_ticks(compd_range[1:11])
-  cb = plt.clabel(pltm, inline_spacing=0.0, fontsize=12, fmt="%1.0f")
+  cb = plt.clabel(pltm, inline_spacing=0.0, fontsize=12, fmt=plotDict.get('clabel_fmt', "%1.0f"))
 
   plt.savefig(fileout,format='png',dpi=120,bbox_inches='tight')
   plt.close(fig)
@@ -388,6 +394,9 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
       fileout (string):  Name of output figure in .png format
       plotDict (dict.):  Dictionary that contains configuration options
   '''
+
+#  if np.max(lon) > 180.:
+#     lon[:] = (lon[:] + 180.) % 360. - 180.
 
   minLat = float(plotDict.get('min_lat', np.amin(lat)))
   maxLat = float(plotDict.get('max_lat', np.amax(lat)))
