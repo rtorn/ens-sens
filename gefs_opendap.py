@@ -86,6 +86,42 @@ def stage_atcf_files(datea, bbnnyyyy, config):
           fo.write(os.popen('sed -ne /{0}/p {1}/a{2}.dat | sed -ne /{3}{4}/p'.format(datea,config['work_dir'],bbnnyyyy,modid,nn)).read())
           fo.close()
 
+
+def stage_best_file(bbnnyyyy, config):
+    '''
+    This is a generic routine for copying or linking ATCF best track file data from a specific location
+    to a directory where calculations are performed.  No matter where these calculations are
+    carried out, this routine must exist.
+
+    The result is a single best track file in the work directory of the format bbnnyyyy.dat, 
+    where bb is the basin, nn is the TC number.
+
+    This particular instance copies data from the NHC data server.  
+
+    Attributes:
+        bbnnyyyy (string):  TC Identification, where bb is the basin, nn is the number, yyyy is year
+        config     (dict):  The dictionary with configuration information
+    '''
+
+    try:    #  Look for the data in the real-time directory
+
+      filei = urllib.request.urlopen('{0}/b{1}.dat'.format(config['best_dir'],bbnnyyyy))
+      fileo = open('{0}/b{1}.dat'.format(config['work_dir'],bbnnyyyy), 'wb')
+      fileo.write(filei.read())
+      filei.close()
+      fileo.close()
+
+    except:    #  If the file is not present in the real-time directory, look in the archive.
+
+      src  = '{0}/{1}/b{2}.dat.gz'.format(config.get('best_dir_alt','https://ftp.nhc.noaa.gov/atcf/archive'),bbnnyyyy[4:8],bbnnyyyy)
+
+      #  Unzip the file from the NHC server, write the file to the work directory
+      gzfile = gzip.GzipFile(fileobj=urllib.request.urlopen(src))
+      uzfile = open('{0}/b{1}.dat'.format(config['work_dir'],bbnnyyyy), 'wb')
+      uzfile.write(gzfile.read())
+      gzfile.close()
+      uzfile.close()
+
  
 class ReadGribFiles:
     '''
@@ -117,7 +153,7 @@ class ReadGribFiles:
                 self.ds_dict = xr.open_dataset(file_name)
             except (OSError, RuntimeError):
                 print("Read Error; Sleeping before trying again")
-                time.sleep(300)
+                time.sleep(240)
                 self.ds_dict = xr.open_dataset(file_name)
             except IOError as exc:
                 raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
@@ -128,7 +164,7 @@ class ReadGribFiles:
                 self.ds_dictb = xr.open_dataset(file_name)
             except (OSError, RuntimeError):
                 print("Read Error; Sleeping before trying again")
-                time.sleep(300)
+                time.sleep(240)
                 self.ds_dictb = xr.open_dataset(file_name)
             except IOError as exc:
                 raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
@@ -183,7 +219,7 @@ class ReadGribFiles:
           try:
              latvec = list(self.ds_dict[vname].lat.data)
           except (OSError, RuntimeError):
-             time.sleep(300)
+             time.sleep(240)
              latvec = list(self.ds_dict[vname].lat.data) 
           vdict['lat_start'] = latvec[0]
           vdict['lat_end']   = latvec[-1]
@@ -198,7 +234,7 @@ class ReadGribFiles:
           try:
              lonvec = list(self.ds_dict[vname].lon.data)
           except (OSError, RuntimeError):
-             time.sleep(300)
+             time.sleep(240)
              lonvec = list(self.ds_dict[vname].lon.data)
           vdict['lon_start'] = lonvec[0]
           vdict['lon_end']   = lonvec[-1]
@@ -241,12 +277,12 @@ class ReadGribFiles:
        try:
           lonvec = list(self.ds_dict[self.var_dict[varname]].sel(lon=slice(vdict['lon_start'], vdict['lon_end'])).lon.data).copy()
        except (OSError, RuntimeError):
-          time.sleep(300)
+          time.sleep(240)
           lonvec = list(self.ds_dict[self.var_dict[varname]].sel(lon=slice(vdict['lon_start'], vdict['lon_end'])).lon.data).copy()
        try:
           latvec = list(self.ds_dict[self.var_dict[varname]].sel(lat=slice(vdict['lat_start'], vdict['lat_end'])).lat.data).copy()
        except (OSError, RuntimeError):
-          time.sleep(300)
+          time.sleep(240)
           latvec = list(self.ds_dict[self.var_dict[varname]].sel(lat=slice(vdict['lat_start'], vdict['lat_end'])).lat.data).copy()
        ensarr = xr.DataArray(name='ensemble_data', data=np.zeros([nens, len(latvec), len(lonvec)]),
                              dims=['ensemble', 'latitude', 'longitude'], attrs=attrlist, 
@@ -290,7 +326,7 @@ class ReadGribFiles:
                                                 ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
              except (OSError, RuntimeError):
                 print("Read Field Error; Sleeping before trying again")
-                time.sleep(300)      
+                time.sleep(240)      
                 vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
                                                 lon=slice(vdict['lon_start'], vdict['lon_end']),   \
                                                 lev=slice(vdict['pres_start'], vdict['pres_end']), \
@@ -312,7 +348,7 @@ class ReadGribFiles:
                                                     ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
                       except (OSError, RuntimeError):
                          print("Read Field Error; Sleeping before trying again")
-                         time.sleep(300)
+                         time.sleep(240)
                          vout[k,:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
                                                     lon=slice(vdict['lon_start'], vdict['lon_end']),   \
                                                     lev=slice(vout.isobaricInhPa.values[k], vout.isobaricInhPa.values[k]), \
@@ -331,7 +367,7 @@ class ReadGribFiles:
                                                ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
                    except (OSError, RuntimeError):
                       print("Read Field Error; Sleeping before trying again")
-                      time.sleep(300)
+                      time.sleep(240)
                       vout[:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
                                                lon=slice(vdict['lon_start'], vdict['lon_end']),   \
                                                lev=slice(vdict['pres_start'], vdict['pres_end']), \
@@ -352,7 +388,7 @@ class ReadGribFiles:
                                                 ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'}).copy(deep=True)
              except (OSError, RuntimeError):
                 print("Read 2D Field Error; Sleeping before trying again") 
-                time.sleep(300)
+                time.sleep(240)
                 vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']), \
                                                 lon=slice(vdict['lon_start'], vdict['lon_end']), \
                                                 time=slice(self.datef, self.datef),              \

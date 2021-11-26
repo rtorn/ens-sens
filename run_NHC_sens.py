@@ -141,12 +141,13 @@ def main():
     dpp.stage_grib_files(datea, config)
     logging.info("Staging ATCF Files")
     dpp.stage_atcf_files(datea, bbnnyyyy, config)
+    dpp.stage_best_file(bbnnyyyy, config)
 
 
     #  Read ATCF data into dictionary
     logging.info("Reading ATCF Files")
     atcf = atools.ReadATCFData('{0}/atcf_*.dat'.format(config['work_dir']))
-    btk = atcf.get_best_data(bbnnyyyy)
+    atcf.read_best_data('{0}/b{1}.dat'.format(config['work_dir'],bbnnyyyy))
 
 
     #  Plot the ensemble forecast
