@@ -159,6 +159,10 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
 
   else:
 
+     if lon1 > 180. or lon2 > 180.:
+       lon1 = lon1 - 360.
+       lon2 = lon2 - 360.
+
      ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
 
      gridInt = float(DomDict.get('grid_interval', 10.))
@@ -167,6 +171,7 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
                      linewidth=1, color='gray', alpha=0.5, linestyle='-')
      gl.top_labels = None
      gl.left_labels = None
+     gl.right_labels = True
      gl.xlocator = mticker.FixedLocator(np.arange(-180.,180.,gridInt))
      gl.xformatter = LONGITUDE_FORMATTER
      gl.xlabel_style = {'size': 12, 'color': 'gray'}
