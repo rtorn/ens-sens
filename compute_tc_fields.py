@@ -248,8 +248,8 @@ class ComputeTCFields:
 
             thta = mpcalc.potential_temperature(pres[:, None, None], tmpk)
 
-            uwnd = mpcalc.smooth_n_point(g1.read_grib_field('zonal_wind', n, vDict) * units('m/s'), 9, 4)
-            vwnd = mpcalc.smooth_n_point(g1.read_grib_field('meridional_wind', n, vDict) * units('m/s'), 9, 4)
+            uwnd = g1.read_grib_field('zonal_wind', n, vDict) * units('m/s')
+            vwnd = g1.read_grib_field('meridional_wind', n, vDict) * units('m/s')
 
             dx, dy = mpcalc.lat_lon_grid_deltas(lons, lats, x_dim=-1, y_dim=-2, geod=None)
 
@@ -257,7 +257,8 @@ class ComputeTCFields:
             pvout = mpcalc.potential_vorticity_baroclinic(thta, pres[:, None, None], uwnd, vwnd,
                                            dx[None, :, :], dy[None, :, :], lats[None, :, None])
 
-            ensmat[n,:,:] = np.squeeze(pvout[np.where(pres == 250 * units('hPa'))[0],:,:]) * 1.0e6
+            ensmat[n,:,:] = grid_calc.calc_circ_llgrid(pvout[np.where(pres == 250 * units('hPa'))[0],:,:], \
+                                                       300., lats, lons, False, len(lons), len(lats)) * 1.0e6
  
           ensmat.to_netcdf(outfile, encoding=dencode)
 
