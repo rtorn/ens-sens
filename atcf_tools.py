@@ -265,8 +265,10 @@ class ReadATCFData:
         try:
           self.bestdf = pd.read_csv(filepath_or_buffer=bestfile, header=None, usecols=range(10))
           self.bestdf.columns = self.cols[0:len(self.bestdf.columns)]
+          self.has_best = True
         except:
           print("{0} not found".format(bestfile))
+          self.has_best = False
 
     def best_vitals_time(self, datea):
         '''
@@ -311,7 +313,7 @@ class ReadATCFData:
            lat = self.lat_str_to_float(dfalt['lat'][0])
            lon = self.lon_str_to_float(dfalt['lon'][0])
 
-           return lat lon
+           return lat, lon
 
         except:
 
