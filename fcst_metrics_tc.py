@@ -646,20 +646,13 @@ class ComputeForecastMetrics:
               m_lon[t] = m_lon[t] / e_cnt
               m_lat[t] = m_lat[t] / e_cnt
 
-              if e_cnt >= ens_min:
+              for n in range(self.nens):
+                 if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
+                    dy[t] = dy[t] + np.radians(ens_lat[n,t]-m_lat[t])*self.earth_radius * pc1[n]
+                    dx[t] = dx[t] + np.radians(ens_lon[n,t]-m_lon[t])*self.earth_radius*np.cos(np.radians(m_lat[t])) * pc1[n]
 
-                 for n in range(self.nens):
-                    if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
-                       dy[t] = dy[t] + np.radians(ens_lat[n,t]-m_lat[t])*self.earth_radius * pc1[n]
-                       dx[t] = dx[t] + np.radians(ens_lon[n,t]-m_lon[t])*self.earth_radius*np.cos(np.radians(m_lat[t])) * pc1[n]
-
-                 dy[t] = dy[t] / e_cnt
-                 dx[t] = dx[t] / e_cnt
-
-              else:
-
-                 dx[t] = 0.
-                 dy[t] = 0.
+              dy[t] = dy[t] / e_cnt
+              dx[t] = dx[t] / e_cnt
 
 
         imsum = 0.
@@ -739,23 +732,10 @@ class ComputeForecastMetrics:
         ell_freq = self.config['vitals_plot'].get('ellipse_frequency', 24)
         ellcol = ["#551A8B", "#00FFFF", "#00EE00", "#FF0000", "#FF00FF", "#551A8B", "#00FFFF", "#00EE00", "#FF0000"]
 
-        #  Create basic figure plotting options
-        fig = plt.figure(figsize=(11,8.5))
-
-        ax = plt.axes(projection=ccrs.PlateCarree())
-        states = NaturalEarthFeature(category="cultural", scale="50m",
-                                     facecolor="none",
-                                     name="admin_1_states_provinces_shp")
-        ax.add_feature(states, linewidth=0.5, edgecolor="black")
-        ax.coastlines('50m', linewidth=1.0)
-        ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
-        ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
-
         minLat =  90.
         maxLat = -90.
         minLon = 360.
         maxLon = -180.
-        gridInt = 5.
 
         #  Determine range of figure
         for n in range(self.nens):
@@ -771,19 +751,14 @@ class ComputeForecastMetrics:
         minLon = minLon - 2.5
         maxLon = maxLon + 2.5
 
-        #  Add gridlines
-        gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
-                      linewidth=1, color='gray', alpha=0.5, linestyle='-')
-        gl.top_labels = None
-        gl.right_labels = None
-        gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLon),10.*np.ceil(0.1*maxLon)+1.,gridInt))
-        gl.xformatter = LONGITUDE_FORMATTER
-        gl.xlabel_style = {'size': 12, 'color': 'gray'}
-        gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLat),10.*np.ceil(0.1*maxLat)+1.,gridInt))
-        gl.yformatter = LATITUDE_FORMATTER
-        gl.ylabel_style = {'size': 12, 'color': 'gray'}
+        trackDict = {}
+        trackDict['grid_interval'] = self.config['vitals_plot'].get('grid_interval', 5)
+        trackDict['left_labels'] = 'True'
+        trackDict['right_labels'] = 'None'
 
-        ax.set_extent([minLon, maxLon, minLat, maxLat], ccrs.PlateCarree())
+        #  Create basic figure plotting options
+        fig = plt.figure(figsize=(11,8.5))
+        ax = background_map(self.config['vitals_plot'].get('projection', 'PlateCarree'), minLon, maxLon, minLat, maxLat, trackDict)
 
         x_ell = np.zeros(360)
         y_ell = np.zeros(360)
@@ -797,11 +772,11 @@ class ComputeForecastMetrics:
             if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
               y.append(ens_lat[n,t])
               x.append(ens_lon[n,t])
-          ax.plot(x, y, color='lightgray', zorder=1, transform=ccrs.Geodetic())
+          ax.plot(x, y, color='lightgray', zorder=1, transform=ccrs.PlateCarree())
 
         #  Plot the ensemble mean and track perturbation
-        ax.plot(m_lon, m_lat, color='black', linewidth=3, zorder=15, transform=ccrs.Geodetic())        
-        ax.plot(p_lon, p_lat, '--', color='black', linewidth=3, zorder=15, transform=ccrs.Geodetic())
+        ax.plot(m_lon, m_lat, color='black', linewidth=3, zorder=15, transform=ccrs.PlateCarree())        
+        ax.plot(p_lon, p_lat, '--', color='black', linewidth=3, zorder=15, transform=ccrs.PlateCarree())
 
         #  Plot the ellipses and points 
         color_index = 0
@@ -853,11 +828,11 @@ class ComputeForecastMetrics:
                   rdex = rdex + 1
                   break
 
-            ax.plot(x_ell, y_ell, color=ellcol[color_index], zorder=20, transform=ccrs.Geodetic())
+            ax.plot(x_ell, y_ell, color=ellcol[color_index], zorder=20, transform=ccrs.PlateCarree())
 
             color_index += 1            
 
-        plt.title("{0} ECMWF forecast of {1}".format(self.datea_str, self.config['storm']))
+        plt.title("{0} {1} forecast of {2}".format(self.datea_str, self.config.get('model_src',''), self.storm))
 
         outdir = '{0}/{1}.{2}/f{3}_intmajtrack'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2)
         if not os.path.isdir(outdir):
@@ -1438,7 +1413,7 @@ class ComputeForecastMetrics:
 
         ensmat = g1.create_ens_array('zonal_wind_10m', self.nens, vDict)
 
-        for fhr in range(fhr1, fhr2+12, 12):
+        for fhr in range(fhr1, fhr2+int(self.config['fcst_hour_int']), int(self.config['fcst_hour_int'])):
 
            g1 = self.dpp.ReadGribFiles(self.datea_str, fhr, self.config)
 
@@ -1495,7 +1470,7 @@ class ComputeForecastMetrics:
         pltm = plt.contour(ensmat.longitude.values,ensmat.latitude.values,dwnd,cntrs,linewidths=1.5, colors='k', zorder=10)
 
         #  Add colorbar to the plot
-        cbar = plt.colorbar(pltf, fraction=0.15, aspect=45., pad=0.04, orientation='horizontal', ticks=mwnd)
+        cbar = plt.colorbar(pltf, fraction=0.12, aspect=45., pad=0.04, orientation='horizontal', ticks=mwnd)
         cbar.set_ticks(mwnd[1:(len(mwnd)-1)])
         cb = plt.clabel(pltm, inline_spacing=0.0, fontsize=12, fmt="%1.0f")
 

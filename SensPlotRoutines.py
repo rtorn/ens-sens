@@ -170,8 +170,8 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
      gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
                      linewidth=1, color='gray', alpha=0.5, linestyle='-')
      gl.top_labels = None
-     gl.left_labels = None
-     gl.right_labels = True
+     gl.left_labels = eval(DomDict.get('left_labels','None'))
+     gl.right_labels = eval(DomDict.get('right_labels','True'))
      gl.xlocator = mticker.FixedLocator(np.arange(-180.,180.,gridInt))
      gl.xformatter = LONGITUDE_FORMATTER
      gl.xlabel_style = {'size': 12, 'color': 'gray'}
