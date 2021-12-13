@@ -2,6 +2,8 @@ import os
 import time
 import sys
 import cfgrib
+import gzip
+import urllib
 import datetime as dt
 import numpy as np
 import xarray as xr
@@ -62,7 +64,7 @@ def stage_grib_files(datea, config):
 
              #  read a few extra fields from the alternate files
              falt = '{0}/pgrb2b/{1}/{2}'.format(config['model_dir'],fdir,fbase)
-             os.system('wgrib2 -s {0} | grep -e \"TMP:300 mb\" -e \"TMP:400 mb\" | wgrib2 -fix_ncep -i -append {0} -grib {1}'.format(falt,fout))
+             os.system('wgrib2 -s {0} | grep -e \"TMP:300 mb\" -e \"TMP:400 mb\" -e \"RH:300 mb\" -e \"RH:400 mb\" | wgrib2 -fix_ncep -i -append {0} -grib {1}'.format(falt,fout))
 
 
 def stage_atcf_files(datea, bbnnyyyy, config):
@@ -113,6 +115,42 @@ def stage_atcf_files(datea, bbnnyyyy, config):
           fo.close()
 
 
+def stage_best_file(bbnnyyyy, config):
+    '''
+    This is a generic routine for copying or linking ATCF best track file data from a specific location
+    to a directory where calculations are performed.  No matter where these calculations are
+    carried out, this routine must exist.
+
+    The result is a single best track file in the work directory of the format bbnnyyyy.dat, 
+    where bb is the basin, nn is the TC number.
+
+    This particular instance copies data from the NHC data server.  
+
+    Attributes:
+        bbnnyyyy (string):  TC Identification, where bb is the basin, nn is the number, yyyy is year
+        config     (dict):  The dictionary with configuration information
+    '''
+
+    try:    #  Look for the data in the real-time directory
+
+      filei = urllib.request.urlopen('{0}/b{1}.dat'.format(config.get('best_dir','https://ftp.nhc.noaa.gov/atcf/btk'),bbnnyyyy))
+      fileo = open('{0}/b{1}.dat'.format(config['work_dir'],bbnnyyyy), 'wb')
+      fileo.write(filei.read())
+      filei.close()
+      fileo.close()
+
+    except:    #  If the file is not present in the real-time directory, look in the archive.
+
+      src  = '{0}/{1}/b{2}.dat.gz'.format(config.get('best_dir_alt','https://ftp.nhc.noaa.gov/atcf/archive'),bbnnyyyy[4:8],bbnnyyyy)
+
+      #  Unzip the file from the NHC server, write the file to the work directory
+      gzfile = gzip.GzipFile(fileobj=urllib.request.urlopen(src))
+      uzfile = open('{0}/b{1}.dat'.format(config['work_dir'],bbnnyyyy), 'wb')
+      uzfile.write(gzfile.read())
+      gzfile.close()
+      uzfile.close()
+
+
 class ReadGribFiles:
     '''
     This is a generic class that is used to read specific forecast fields from a grib file at a specific 
@@ -151,19 +189,26 @@ class ReadGribFiles:
         except IOError as exc:
            raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
 
+        #  This is a dictionary that maps from generic variable names to the name of variable in file
+        self.var_dict = {'zonal_wind': 'u',             \
+                         'meridional_wind': 'v',        \
+                         'zonal_wind_10m': 'u10',       \
+                         'meridional_wind_10m': 'v10',  \
+                         'geopotential_height': 'gh',   \
+                         'temperature': 't',            \
+                         'specific_humidity': 'q',      \
+                         'relative_humidity': 'r',      \
+                         'sea_level_pressure': 'prmsl', \
+                         'precipitation': 'tp' }
+
         for key in self.grib_dict:
            if np.max(self.grib_dict[key].coords['longitude']) > 180:
               self.grib_dict[key].coords['longitude']  = (self.grib_dict[key].coords['longitude'] + 180) % 360 - 180
 
-        #  This is a dictionary that maps from generic variable names to the name of variable in file
-        self.var_dict = {'zonal_wind': 'u',          \
-                         'meridional_wind': 'v',     \
-                         'geopotential_height': 'gh',  \
-                         'temperature': 't',          \
-                         'specific_humidity': 'q',    \
-                         'relative_humidity': 'r',     \
-                         'sea_level_pressure': 'prmsl', \
-                         'precipitation': 'tp' }
+        if config.get('flip_lon','False') == 'True':
+           for key in self.grib_dict:
+              self.grib_dict[key].coords['longitude'] = (self.grib_dict[key].coords['longitude'] + 360.) % 360.
+              self.grib_dict[key] = self.grib_dict[key].sortby('longitude')
 
         if '{0}_cf'.format(self.var_dict['specific_humidity']) in self.grib_dict:
            self.has_specific_humidity = True
