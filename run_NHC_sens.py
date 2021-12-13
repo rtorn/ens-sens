@@ -153,7 +153,8 @@ def main():
     #  Plot the ensemble forecast
     config['vitals_plot']['track_output_dir'] = config['vitals_plot'].get('track_output_dir', '{0}/{1}.{2}'.format(config['work_dir'],str(datea),storm))
     config['vitals_plot']['int_output_dir'] = config['vitals_plot'].get('int_output_dir', '{0}/{1}.{2}'.format(config['work_dir'],str(datea),storm))
-    tc.atcf_ens_tc_vitals(atcf, btk, datea, storm, config['model_src'], 50, config['vitals_plot'], config['work_dir'])
+    tc.plot_ens_tc_track(atcf, storm, datea, config) 
+    tc.plot_ens_tc_intensity(atcf, storm, datea, config)
 
 
     #  Compute TC-related forecast metrics
