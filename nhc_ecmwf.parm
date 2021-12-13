@@ -5,35 +5,40 @@ io_module=ecmwf_teton
 num_ens=50
 fcst_hour_int=12
 fcst_hour_max=120
-tigge_forecast_time=0/6/12/18/24/30/36/42/48/54/60/66/72/78/84
+tigge_forecast_time=0/12/24/36/48/60/72/84/96/108/120
 
 [locations]
 atcf_dir=/ct12/abrammer/graphics/ecmf_tc_data/data
+best_dir=https://ftp.nhc.noaa.gov/atcf/btk
 model_dir=/tornlab_rit/torn/ecmwf
 
-work_dir=/free/rt756354/JHT/work_ecmwf
-output_dir=/free/rt756354/JHT/output_ecmwf
+work_dir=/rt11/torn/JHT/work_ecmwf
+output_dir=/rt11/torn/JHT/output_ecmwf
 script_dir=/home11/staff/torn/JHT-python
 html_dir=/home11/staff/torn/html/JHT/ECMWF
 outgrid_dir=/home11/staff/torn/html/JHT/ECMWF/grid
-log_dir=/free/rt756354/JHT/log_ecmwf
+log_dir=/rt11/torn/JHT/log_ecmwf
 
 [vitals_plot]
 trackfile=track.png
 intfile=intensity.png
 forecast_hour_max=168
 grid_interval=5
+plot_best=False
 
 [metric]
 metric_hours=[0, 48]
 int_track_fhr1=24
 int_track_fhr2=120
+track_eof_member_frac = 0.3 
 intensity_eof_hour_final=96
+intensity_eof_member_frac = 0.3
 kinetic_energy_metric=True
-wind_speed_eof_metric=False
-wind_metric_file=/free/torn/JHT/metrics_wind/{0}_{1}_wind
+wind_speed_eof_metric=True
+wind_metric_file=/rt11/torn/JHT/metrics_wind/{0}_{1}_wind
 precipitation_eof_metric=True
-precip_metric_file=/free/torn/JHT/metrics_pcp/{0}_{1}_precip
+precip_metric_file=/rt11/torn/JHT/metrics_pcp/{0}_{1}_precip
+grid_interval=5
 
 [fields]
 calc_steer_circ=True
@@ -53,11 +58,11 @@ metrics=f120_intmajtrack, f096_intmslp, f120_pcpeof
 #max_lon=-20.0
 grid_interval=10.
 barb_interval=6
-dropsonde_file=/free/torn/SHOUT/dropinfo/2019090112_drop_info.tx
+dropsonde_file=/rt11/torn/JHT/dropinfo/{0}_drop_info.txt
 drop_mark_size=10
 drop_mark_color=black
-drop_mark_type=+
-rawinsonde_file=/free/rt756354/JHT/rawindsondes.txt
+drop_mark_type=P
+rawinsonde_file=/free/torn/JHT/rawindsondes.txt
 rawin_mark_size=6
 rawin_mark_color=gray
 range_rings=False
