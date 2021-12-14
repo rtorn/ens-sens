@@ -125,12 +125,21 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
   '''
 
   if proj == 'NorthPolarStereo':
-     ax = plt.axes(projection=ccrs.NorthPolarStereo(central_longitude=0.0))
+     projinfo = ccrs.NorthPolarStereo(central_longitude=0.0)
   elif (lon1 < 180. and lon2 > 180.):
-     ax = plt.axes(projection=ccrs.PlateCarree(central_longitude=180.))
+     projinfo = ccrs.PlateCarree(central_longitude=180.)
   else:
-     ax = plt.axes(projection=ccrs.PlateCarree())
+     projinfo = ccrs.PlateCarree()
 
+  if eval(DomDict.get('subplot','False')):
+
+     ax = plt.subplot(DomDict['subrows'], DomDict['subcols'], \
+                       DomDict['subnumber'], projection=projinfo)
+
+  else:
+
+     ax = plt.axes(projection=projinfo)
+ 
   states = NaturalEarthFeature(category="cultural", scale="50m",
                                facecolor="none", name="admin_1_states_provinces")
   ax.add_feature(states, linewidth=0.5, edgecolor="black")
