@@ -105,7 +105,7 @@ def stage_best_file(bbnnyyyy, config):
 
     try:    #  Look for the data in the real-time directory
 
-      filei = urllib.request.urlopen('{0}/b{1}.dat'.format(config['best_dir'],bbnnyyyy))
+      filei = urllib.request.urlopen('{0}/b{1}.dat'.format(config.get('best_dir','https://ftp.nhc.noaa.gov/atcf/btk'),bbnnyyyy))
       fileo = open('{0}/b{1}.dat'.format(config['work_dir'],bbnnyyyy), 'wb')
       fileo.write(filei.read())
       filei.close()
