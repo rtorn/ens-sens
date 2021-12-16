@@ -18,7 +18,10 @@ def plot_ens_tc_track(atcf, storm, datea, config):
         datea (string):  Initialization date (yyyymmddhh format)
         config (dict.):  dictionary that contains configuration options (read from file)
     '''
-    
+
+    earth_radius = 6378.388
+    deg2rad      = np.radians(180.)/180.
+
     output_dir = config['vitals_plot'].get('track_output_dir', '.')
     fhrint  = float(config['vitals_plot'].get('fhrint',6))
     fhrmax  = float(config['vitals_plot'].get('forecast_hour_max',120))
@@ -26,7 +29,6 @@ def plot_ens_tc_track(atcf, storm, datea, config):
     ntimes = int(fhrmax / fhrint) + 1
     nens   = len(atcf.atcf_files)  # total ensembles
 
-    plot_ellipse = eval(config['vitals_plot'].get('plot_ellipse', 'True'))
     subcolors = ["Blue", "DarkOrange"]
     ellcol = ["#551A8B", "#00FFFF", "#00EE00", "#FF0000", "#FF00FF", "#551A8B", "#00FFFF", "#00EE00", "#FF0000"]
     plot_best = eval(config['vitals_plot'].get('plot_best', 'True'))
@@ -118,11 +120,11 @@ def plot_ens_tc_track(atcf, storm, datea, config):
 #        t = t + 1
 
     #  Plot individual member positions and ellipse if desired
-    if plot_ellipse:
+    if eval(config['vitals_plot'].get('plot_ellipse', 'True')):
 
        color_index = 0
-       x_ell = np.empty(360)
-       y_ell = np.empty(360)
+       x_ell = np.empty(361)
+       y_ell = np.empty(361)
        e_lat = np.empty(nens)
        e_lon = np.empty(nens)
        ell_freq = float(config['vitals_plot'].get('ellipse_frequency', 24))
@@ -152,9 +154,11 @@ def plot_ens_tc_track(atcf, storm, datea, config):
              m_lon = m_lon / pcnt
              pb[:,:] = 0.0
              for n in range(pcnt):
-                pb[0,0] = pb[0,0] + (e_lon[n] - m_lon)**2
-                pb[1,1] = pb[1,1] + (e_lat[n] - m_lat)**2 
-                pb[1,0] = pb[1,0] + (e_lon[n] - m_lon) * (e_lat[n] - m_lat)
+                fx      = np.radians(e_lon[n]-m_lon) * earth_radius * np.cos(np.radians(0.5*(e_lat[n] + m_lat)))
+                fy      = np.radians(e_lat[n]-m_lat) * earth_radius
+                pb[0,0] = pb[0,0] + fx**2
+                pb[1,1] = pb[1,1] + fy**2
+                pb[1,0] = pb[1,0] + fx*fy
              pb[0,1] = pb[1,0]
 
              pb[:,:] = pb[:,:] / float(pcnt-1)
@@ -165,17 +169,17 @@ def plot_ens_tc_track(atcf, storm, datea, config):
 
              #  Loop over each radian, find the radius that is consistent with the 90% contour
              rdex = 0
-             for rad in range(int(math.degrees(2 * math.pi))):
+             for rad in range(int(math.degrees(2 * math.pi))+1):
                 x_start = math.cos(math.radians(rad))
                 y_start = math.sin(math.radians(rad))
-                for r_distance in range(2400):
-                   x_loc = x_start * r_distance / 80.0
-                   y_loc = y_start * r_distance / 80.0
+                for r_distance in range(4000):
+                   x_loc = x_start * r_distance
+                   y_loc = y_start * r_distance
                    prob = math.exp(-1.0 * fac * ((x_loc / sigma_x) ** 2 + (y_loc / sigma_y) ** 2 -
                                                2.0 * rho * (x_loc / sigma_x) * (y_loc / sigma_y)))
                    if prob < 0.256:
-                      x_ell[rdex] = x_loc + m_lon
-                      y_ell[rdex] = y_loc + m_lat
+                      x_ell[rdex] = m_lon + x_loc / (deg2rad*earth_radius*np.cos(np.radians(m_lat)))
+                      y_ell[rdex] = m_lat + y_loc / (deg2rad*earth_radius)
                       rdex = rdex + 1
                       break
              ax.plot(x_ell, y_ell, color=ellcol[color_index], zorder=12, transform=ccrs.PlateCarree())
