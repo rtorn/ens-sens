@@ -5,16 +5,13 @@ import json
 import numpy as np
 import datetime as dt
 import logging
+import configparser
 
 import matplotlib
 from IPython.core.pylabtools import figsize, getfigs
 import importlib
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-import cartopy
 import cartopy.crs as ccrs
-from cartopy.feature import NaturalEarthFeature
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 
 from eofs.standard import Eof
 from eofs.xarray import Eof as Eof_xarray
@@ -63,7 +60,7 @@ class ComputeForecastMetrics:
         #  Define class-specific variables
         self.fhr = None
         self.deg2rad = 0.01745
-        self.earth_radius = 6378388.
+        self.earth_radius = 6378.388
         self.missing = -9999.
         self.deg2km = self.earth_radius * np.radians(1)
 
@@ -760,8 +757,8 @@ class ComputeForecastMetrics:
         fig = plt.figure(figsize=(11,8.5))
         ax = background_map(self.config['vitals_plot'].get('projection', 'PlateCarree'), minLon, maxLon, minLat, maxLat, trackDict)
 
-        x_ell = np.zeros(360)
-        y_ell = np.zeros(360)
+        x_ell = np.zeros(361)
+        y_ell = np.zeros(361)
         pb    = np.zeros((2, 2))
 
         #  Plot the individual ensemble members
@@ -802,9 +799,11 @@ class ComputeForecastMetrics:
 
             pb[:,:] = 0.0
             for n in range(len(x_ens)):
-              pb[0,0] = pb[0,0] + (x_ens[n]-m_lon[t])**2
-              pb[1,1] = pb[1,1] + (y_ens[n]-m_lat[t])**2
-              pb[1,0] = pb[1,0] + (x_ens[n]-m_lon[t])*(y_ens[n]-m_lat[t])
+              fx      = np.radians(x_ens[n]-m_lon[t]) * self.earth_radius * np.cos(np.radians(0.5*(y_ens[n] + m_lat[t])))
+              fy      = np.radians(y_ens[n]-m_lat[t]) * self.earth_radius
+              pb[0,0] = pb[0,0] + fx**2
+              pb[1,1] = pb[1,1] + fy**2
+              pb[1,0] = pb[1,0] + fx*fy
 
             pb[0,1] = pb[1,0]
             pb[:,:] = pb[:,:] / float(e_cnt-1)
@@ -814,17 +813,17 @@ class ComputeForecastMetrics:
             fac = 1. / (2. * (1. - rho * rho))
 
             rdex = 0
-            for rad in range(int(np.degrees(2*np.pi))):
+            for rad in range(int(np.degrees(2*np.pi))+1):
               x_start = np.cos(np.radians(rad))
               y_start = np.sin(np.radians(rad))
-              for r_distance in range(2400):
-                x_loc = x_start * r_distance / 80.0
-                y_loc = y_start * r_distance / 80.0
+              for r_distance in range(4000):
+                x_loc = x_start * r_distance
+                y_loc = y_start * r_distance
                 prob = np.exp(-1.0 * fac * ((x_loc / sigma_x) ** 2 + (y_loc / sigma_y) ** 2 -
                                   2.0 * rho * (x_loc / sigma_x) * (y_loc / sigma_y)))
                 if prob < 0.256:
-                  x_ell[rdex] = x_loc + m_lon[t]
-                  y_ell[rdex] = y_loc + m_lat[t]
+                  x_ell[rdex] = m_lon[t] + x_loc / (self.deg2rad*self.earth_radius*np.cos(np.radians(m_lat[t]))) 
+                  y_ell[rdex] = m_lat[t] + y_loc / (self.deg2rad*self.earth_radius)
                   rdex = rdex + 1
                   break
 
@@ -832,7 +831,9 @@ class ComputeForecastMetrics:
 
             color_index += 1            
 
-        plt.title("{0} {1} forecast of {2}".format(self.datea_str, self.config.get('model_src',''), self.storm))
+        fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
+        plt.title("{0} {1} forecast of {2}, {3} of variance".format(self.datea_str, \
+                           self.config.get('model_src',''), self.storm, fracvar))
 
         outdir = '{0}/{1}.{2}/f{3}_intmajtrack'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2)
         if not os.path.isdir(outdir):
@@ -992,7 +993,9 @@ class ComputeForecastMetrics:
 
         ax0.set_xlabel("Forecast Hour")
         ax0.set_ylabel("Minimum Pressure (hPa)")
-        plt.title("{0} ECMWF forecast of {1}".format(self.datea_str, self.config['storm']))
+        fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
+        plt.title("{0} {1} forecast of {2}, {3} of variance".format(self.datea_str, \
+                     self.config.get('model_src',''), self.config['storm'], fracvar))
         plt.xticks(range(0,240,24))
         plt.xlim(0, 120)
 
@@ -1191,8 +1194,15 @@ class ComputeForecastMetrics:
         colorlist = ("#FFFFFF", "#00ECEC", "#01A0F6", "#0000F6", "#00FF00", "#00C800", "#009000", "#FFFF00", \
                      "#E7C000", "#FF9000", "#FF0000", "#D60000", "#C00000", "#FF00FF", "#9955C9")
 
-        ax1 = plt.subplot(1, 2, 1, projection=ccrs.PlateCarree())
-        ax1 = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, self.config['metric'])
+        plotBase = {}
+        plotBase['subplot']       = 'True'
+        plotBase['subrows']       = 1
+        plotBase['subcols']       = 2
+        plotBase['subnumber']     = 1
+        plotBase['grid_interval'] = config['metric'].get('grid_interval', 5)
+        plotBase['left_labels'] = 'True'
+        plotBase['right_labels'] = 'None'
+        ax1 = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, plotBase)
 
         #  Plot the ensemble-mean precipitation on the left panel
         mpcp = [0.0, 0.25, 0.50, 1., 1.5, 2., 4., 6., 8., 12., 16., 24., 32., 64., 96., 97.]
@@ -1205,8 +1215,10 @@ class ComputeForecastMetrics:
 
         plt.title('Mean')
 
-        ax2 = plt.subplot(1, 2, 2, projection=ccrs.PlateCarree())
-        ax2 = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, self.config['metric'])
+        plotBase['subnumber']     = 2
+        plotBase['left_labels'] = 'None'
+        plotBase['right_labels'] = 'None'
+        ax2 = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, plotBase)
 
         #  Plot the ensemble standard deviation precipitation on the right panel
         spcp = [0., 3., 6., 9., 12., 15., 18., 21., 24., 27., 30., 33., 36., 39., 42., 43.]
@@ -1257,21 +1269,21 @@ class ComputeForecastMetrics:
         '''
 
         infile = self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm)
+
         try:
-           f = open(infile, 'r')
-        except IOError:
+           conf = configparser.ConfigParser()
+           conf.read(infile)
+           fhr1 = int(conf['definition'].get('forecast_hour1'))
+           fhr2 = int(conf['definition'].get('forecast_hour2'))
+           lat1 = float(conf['definition'].get('latitude_min'))
+           lat2 = float(conf['definition'].get('latitude_max'))
+           lon1 = float(conf['definition'].get('longitude_min'))
+           lon2 = float(conf['definition'].get('longitude_max'))
+           metname = conf['definition'].get('metric_name','pcpeof')
+           eofn = int(conf['definition'].get('eof_number',1))
+        except:
            logging.warning('{0} does not exist.  Cannot compute precip EOF'.format(infile))
            return None
-
-        #  Read the text file that contains information on the precipitation metric
-        fhr1 = int(f.readline())
-        fhr2 = int(f.readline())
-        lat1 = float(f.readline())
-        lon1 = float(f.readline())
-        lat2 = float(f.readline())
-        lon2 = float(f.readline())
-
-        f.close()
 
         #  Read the total precipitation for the beginning of the window
         g1 = self.dpp.ReadGribFiles(self.datea_str, fhr2, self.config)
@@ -1311,8 +1323,8 @@ class ComputeForecastMetrics:
         wgts = np.sqrt(coslat)[..., np.newaxis]
 
         solver = Eof_xarray(ensmat.rename({'ensemble': 'time'}), weights=wgts)
-        pcout  = solver.pcs(npcs=3, pcscaling=1)
-        pc1 = np.squeeze(pcout[:,0])
+        pcout  = solver.pcs(npcs=eofn, pcscaling=1)
+        pc1 = np.squeeze(pcout[:,-1])
         pc1[:] = pc1[:] / np.std(pc1)
 
         #  Compute the precipitation pattern associated with a 1 PC perturbation
@@ -1354,7 +1366,7 @@ class ComputeForecastMetrics:
         fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
         plt.title("{0} {1}-{2} hour Precipitation, {3} of variance".format(str(self.datea_str),fhr1,fhr2,fracvar))
 
-        outdir = '{0}/{1}.{2}/f{3}_pcpeof'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2)
+        outdir = '{0}/{1}.{2}/f{3}_{4}'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2,metname)
         if not os.path.isdir(outdir):
            try:
               os.makedirs(outdir)
@@ -1375,7 +1387,7 @@ class ComputeForecastMetrics:
                                                             'data': pc1.data}}}
 
         xr.Dataset.from_dict(f_met_pcpeof_nc).to_netcdf(
-            "{0}/{1}_f{2}_pcpeof.nc".format(self.outdir,str(self.datea_str),'%0.3i' % fhr2), encoding={'fore_met_init': {'dtype': 'float32'}})
+            "{0}/{1}_f{2}_{3}.nc".format(self.outdir,str(self.datea_str),'%0.3i' % fhr2,metname), encoding={'fore_met_init': {'dtype': 'float32'}})
 
 
     def __wind_speed_eof(self):
@@ -1388,21 +1400,21 @@ class ComputeForecastMetrics:
         '''
 
         infile = self.config['metric'].get('wind_metric_file').format(self.datea_str,self.storm)
+
         try:
-           f = open(infile, 'r')
-        except IOError:
+           conf = configparser.ConfigParser()
+           conf.read(infile)
+           fhr1 = int(conf['definition'].get('forecast_hour1'))
+           fhr2 = int(conf['definition'].get('forecast_hour2'))
+           lat1 = float(conf['definition'].get('latitude_min'))
+           lat2 = float(conf['definition'].get('latitude_max'))
+           lon1 = float(conf['definition'].get('longitude_min'))
+           lon2 = float(conf['definition'].get('longitude_max'))
+           metname = conf['definition'].get('metric_name','wndeof')
+           eofn = int(conf['definition'].get('eof_number',1))
+        except:
            logging.warning('{0} does not exist.  Cannot compute wind EOF'.format(infile))
            return None
-
-        #  Read the text file that contains information on the precipitation metric
-        fhr1 = int(f.readline())
-        fhr2 = int(f.readline())
-        lat1 = float(f.readline())
-        lon1 = float(f.readline())
-        lat2 = float(f.readline())
-        lon2 = float(f.readline())
-
-        f.close()
 
         #  Read the total precipitation for the beginning of the window
         g1 = self.dpp.ReadGribFiles(self.datea_str, fhr1, self.config)
@@ -1430,8 +1442,8 @@ class ComputeForecastMetrics:
         wgts = np.sqrt(coslat)[..., np.newaxis]
 
         solver = Eof_xarray(ensmat.rename({'ensemble': 'time'}), weights=wgts)
-        pcout  = solver.pcs(npcs=3, pcscaling=1)
-        pc1 = np.squeeze(pcout[:,0])
+        pcout  = solver.pcs(npcs=neof, pcscaling=1)
+        pc1 = np.squeeze(pcout[:,-1])
         pc1[:] = pc1[:] / np.std(pc1)
 
         #  Compute the precipitation pattern associated with a 1 PC perturbation
@@ -1477,7 +1489,7 @@ class ComputeForecastMetrics:
         fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
         plt.title("{0} {1}-{2} hour Max. Wind Speed, {3} of variance".format(str(self.datea_str),fhr1,fhr2,fracvar))
 
-        outdir = '{0}/{1}.{2}/f{3}_wndeof'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2)
+        outdir = '{0}/{1}.{2}/f{3}_{4}'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2, metname)
         if not os.path.isdir(outdir):
            try:
               os.makedirs(outdir)
@@ -1498,7 +1510,7 @@ class ComputeForecastMetrics:
                                                             'data': pc1.data}}}
 
         xr.Dataset.from_dict(f_met_wndeof_nc).to_netcdf(
-            "{0}/{1}_f{2}_wndeof.nc".format(self.outdir,str(self.datea_str),'%0.3i' % fhr2), encoding={'fore_met_init': {'dtype': 'float32'}})
+            "{0}/{1}_f{2}_{3}.nc".format(self.outdir,str(self.datea_str),'%0.3i' % fhr2, metname), encoding={'fore_met_init': {'dtype': 'float32'}})
 
 
 if __name__ == "__main__":
