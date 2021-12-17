@@ -14,7 +14,7 @@ model_dir=https://nomads.ncep.noaa.gov/dods/gefs
 work_dir=/rt11/torn/JHT/work_gefs
 output_dir=/rt11/torn/JHT/output_gefs
 script_dir=/home11/staff/torn/JHT-python
-html_dir=/home11/staff/torn/html/JHT/GEFS
+figure_dir=/home11/staff/torn/html/JHT/GEFS
 outgrid_dir=/home11/staff/torn/html/JHT/GEFS/grid
 log_dir=/rt11/torn/JHT/log_gefs
 

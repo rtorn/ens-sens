@@ -42,6 +42,7 @@ def read_config(datea, storm, filename):
     #  Modify work and output directory for specific case/time
     config['work_dir']   = '{0}/{1}.{2}'.format(config['work_dir'],datea,storm)
     config['output_dir'] = '{0}/{1}.{2}'.format(config['output_dir'],datea,storm)
+    config['figure_dir'] = '{0}/{1}.{2}'.format(config['figure_dir'],datea,storm)
     config['storm']      = storm
 
     #  Create appropriate directories
@@ -51,9 +52,16 @@ def read_config(datea, storm, filename):
       except OSError as e:
         raise e
 
-    if not os.path.isdir(config['output_dir']):
+    if (eval(config.get('archive_metric','False')) or eval(config.get('archive_metric','False')) ) and \
+               (not os.path.isdir(config['output_dir'])):
       try:
         os.makedirs(config['output_dir'])
+      except OSError as e:
+        raise e
+
+    if not os.path.isdir(config['figure_dir']):
+      try:
+        os.makedirs(config['figure_dir'])
       except OSError as e:
         raise e
 
@@ -128,14 +136,6 @@ def main():
     logging.warning("STARTING SENSITIVITIES for {0} on {1}".format(bbnnyyyy, str(datea)))
 
 
-    #  Create directories to put output graphics 
-    if ( config.get('webpage','True') == 'True' ):
-       if not os.path.isdir('{0}/{1}.{2}'.format(config['html_dir'],datea,storm)):
-          os.makedirs('{0}/{1}.{2}'.format(config['html_dir'],datea,storm))
-       if not os.path.islink('{0}/{1}.{2}'.format(config['work_dir'],datea,storm)):
-          os.symlink('{0}/{1}.{2}'.format(config['html_dir'],datea,storm), \
-                     '{0}/{1}.{2}'.format(config['work_dir'],datea,storm))
-    
     #  Copy grib and ATCF data to the work directory
     logging.info("Staging Grib Files")
     dpp.stage_grib_files(datea, config)
@@ -151,8 +151,8 @@ def main():
 
 
     #  Plot the ensemble forecast
-    config['vitals_plot']['track_output_dir'] = config['vitals_plot'].get('track_output_dir', '{0}/{1}.{2}'.format(config['work_dir'],str(datea),storm))
-    config['vitals_plot']['int_output_dir'] = config['vitals_plot'].get('int_output_dir', '{0}/{1}.{2}'.format(config['work_dir'],str(datea),storm))
+    config['vitals_plot']['track_output_dir'] = config['vitals_plot'].get('track_output_dir', config['figure_dir'])
+    config['vitals_plot']['int_output_dir'] = config['vitals_plot'].get('int_output_dir', config['figure_dir'])
     tc.plot_ens_tc_track(atcf, storm, datea, config) 
     tc.plot_ens_tc_intensity(atcf, storm, datea, config)
 
@@ -193,7 +193,8 @@ def main():
 
     #  Save some of the files, if needed
     if ( config.get('archive_metric','False') == 'True' ):
-       print("Add capability")
+       for met in metlist:
+          os.rename('{0}/{1}_{2}.nc'.format(config['work_dir'],datea,met), '{0}/.'.format(config['output_dir']))
 
     if ( config.get('archive_fields','False') == 'True' ):
        os.rename('{0}/\*_ens.nc'.format(config['work_dir']), '{0}/.'.format(config['output_dir']))
@@ -206,10 +207,6 @@ def main():
     if ( os.path.isfile(tarout) and tarfile.is_tarfile(tarout) ):
        os.system('tar --skip-old-files -xf {0}'.format(tarout))
 
-    for f in ['usteer', 'vsteer', 'masteer', 'misteer']:
-       for g in glob.glob('{0}/{1}.{2}/*_intmajtrack/sens/{3}/*.nc'.format(config['work_dir'],datea,storm,f)): 
-          shutil.copy(g, '{0}/{1}{2}/.'.format(datea,bbl,storm[-3:-1]))
-
     tar = tarfile.open(tarout, 'w')
     for f in glob.glob('{0}/*/*.nc'.format(datea)):
        tar.add(f)
@@ -217,9 +214,10 @@ def main():
 
 
     #  Clean up work directory, if desired
-#    os.chdir(config['work_dir'] + "../")
-#    if ( config.get('save_work_dir','False') == 'False' ):
-#      shutil.rmtree(config['work_dir'])
+    os.chdir('{0}/..'.format(config['work_dir']))
+    if not eval(config.get('save_work_dir','False')):
+       shutil.rmtree(config['work_dir'])
+
 
 if __name__ == '__main__':
 

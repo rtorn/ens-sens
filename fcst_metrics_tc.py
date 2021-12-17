@@ -835,7 +835,7 @@ class ComputeForecastMetrics:
         plt.title("{0} {1} forecast of {2}, {3} of variance".format(self.datea_str, \
                            self.config.get('model_src',''), self.storm, fracvar))
 
-        outdir = '{0}/{1}.{2}/f{3}_intmajtrack'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2)
+        outdir = '{0}/f{1}_intmajtrack'.format(self.config['figure_dir'],'%0.3i' % fhr2)
         if not os.path.isdir(outdir):
            try:
               os.makedirs(outdir)
@@ -1021,7 +1021,7 @@ class ComputeForecastMetrics:
         plt.xticks(range(0,240,24))
         plt.xlim(0, 120)
 
-        outdir = '{0}/{1}.{2}/f{3}_intmslp'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2)
+        outdir = '{0}/f{1}_intmslp'.format(self.config['figure_dir'],'%0.3i' % fhr2)
         if not os.path.isdir(outdir):
            try:
               os.makedirs(outdir)
@@ -1235,7 +1235,7 @@ class ComputeForecastMetrics:
 
         fig.suptitle('F{0}-F{1} Precipitation ({2}-{3})'.format(fff1, fff2, date1_str, date2_str), fontsize=16)
 
-        outdir = '{0}/{1}.{2}/f{3}_precip'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2)
+        outdir = '{0}/f{1}_precip'.format(self.config['figure_dir'],'%0.3i' % fhr2)
         if not os.path.isdir(outdir):
            try:
               os.makedirs(outdir)
@@ -1366,7 +1366,7 @@ class ComputeForecastMetrics:
         fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
         plt.title("{0} {1}-{2} hour Precipitation, {3} of variance".format(str(self.datea_str),fhr1,fhr2,fracvar))
 
-        outdir = '{0}/{1}.{2}/f{3}_{4}'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2,metname)
+        outdir = '{0}/f{1}_{2}'.format(self.config['figure_dir'],'%0.3i' % fhr2,metname)
         if not os.path.isdir(outdir):
            try:
               os.makedirs(outdir)
@@ -1489,7 +1489,7 @@ class ComputeForecastMetrics:
         fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
         plt.title("{0} {1}-{2} hour Max. Wind Speed, {3} of variance".format(str(self.datea_str),fhr1,fhr2,fracvar))
 
-        outdir = '{0}/{1}.{2}/f{3}_{4}'.format(self.config['work_dir'],self.datea_str,self.storm,'%0.3i' % fhr2, metname)
+        outdir = '{0}/f{1}_{2}'.format(self.config['figure_dir'], '%0.3i' % fhr2, metname)
         if not os.path.isdir(outdir):
            try:
               os.makedirs(outdir)

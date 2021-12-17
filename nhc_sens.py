@@ -165,7 +165,7 @@ class ComputeSensitivity:
       sens, sigv = computeSens(uens, umea, uvar, metric)
       sens[:,:] = sens[:,:] * np.sqrt(uvar[:,:])
 
-      outdir = '{0}/{1}.{2}/{3}/sens/usteer'.format(config['work_dir'],datea,config['storm'],metname)
+      outdir = '{0}/{1}/sens/usteer'.format(config['figure_dir'],metname)
       if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
@@ -177,7 +177,7 @@ class ComputeSensitivity:
       plotVecSens(lat, lon, sens, umea, vmea, sigv, '{0}/{1}_f{2}_usteer_sens.png'.format(outdir,datea,fhrt), plotDict)
 
       if e_cnt > 0:
-        outdir = '{0}/{1}.{2}/{3}/sens_sc/usteer'.format(config['work_dir'],datea,config['storm'],metname)
+        outdir = '{0}/{1}/sens_sc/usteer'.format(config['figure_dir'],metname)
         if not os.path.isdir(outdir):
           os.makedirs(outdir)
 
@@ -188,7 +188,7 @@ class ComputeSensitivity:
       sens, sigv = computeSens(vens, vmea, vvar, metric)
       sens[:,:] = sens[:,:] * np.sqrt(vvar[:,:])
 
-      outdir = '{0}/{1}.{2}/{3}/sens/vsteer'.format(config['work_dir'],datea,config['storm'],metname)
+      outdir = '{0}/{1}/sens/vsteer'.format(config['figure_dir'],metname)
       if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
@@ -198,7 +198,7 @@ class ComputeSensitivity:
       plotVecSens(lat, lon, sens, umea, vmea, sigv, '{0}/{1}_f{2}_vsteer_sens.png'.format(outdir,datea,fhrt), plotDict)
 
       if e_cnt > 0:
-        outdir = '{0}/{1}.{2}/{3}/sens_sc/vsteer'.format(config['work_dir'],datea,config['storm'],metname)
+        outdir = '{0}/{1}/sens_sc/vsteer'.format(config['figure_dir'],metname)
         if not os.path.isdir(outdir):
           os.makedirs(outdir)
 
@@ -213,7 +213,7 @@ class ComputeSensitivity:
       sens, sigv = computeSens(wens, emea, evar, metric)
       sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
 
-      outdir = '{0}/{1}.{2}/{3}/sens/masteer'.format(config['work_dir'],datea,config['storm'],metname)
+      outdir = '{0}/{1}/sens/masteer'.format(config['figure_dir'],metname)
       if not os.path.isdir(outdir):
         os.makedirs(outdir)
 
@@ -223,7 +223,7 @@ class ComputeSensitivity:
       plotVecSens(lat, lon, sens, umea, vmea, sigv, '{0}/{1}_f{2}_masteer_sens.png'.format(outdir,datea,fhrt), plotDict)
 
       if e_cnt > 0:
-        outdir = '{0}/{1}.{2}/{3}/sens_sc/masteer'.format(config['work_dir'],datea,config['storm'],metname)
+        outdir = '{0}/{1}/sens_sc/masteer'.format(config['figure_dir'],metname)
         if not os.path.isdir(outdir):
           os.makedirs(outdir)
 
@@ -243,7 +243,7 @@ class ComputeSensitivity:
       sens, sigv = computeSens(ens, emea, evar, metric)
       sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
 
-      outdir = '{0}/{1}.{2}/{3}/sens/csteer'.format(config['work_dir'],datea,config['storm'],metname)
+      outdir = '{0}/{1}/sens/csteer'.format(config['figure_dir'],metname)
       if not os.path.isdir(outdir):
          os.makedirs(outdir)
 
@@ -251,7 +251,7 @@ class ComputeSensitivity:
       plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_csteer_sens.png'.format(outdir,datea,fhrt), plotDict)
 
       if e_cnt > 0:
-        outdir = '{0}/{1}.{2}/{3}/sens_sc/csteer'.format(config['work_dir'],datea,config['storm'],metname)
+        outdir = '{0}/{1}/sens_sc/csteer'.format(config['figure_dir'],metname)
         if not os.path.isdir(outdir):
           os.makedirs(outdir)
 
@@ -274,7 +274,7 @@ class ComputeSensitivity:
          sens, sigv = computeSens(ens, emea, evar, metric)
          sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
 
-         outdir = '{0}/{1}.{2}/{3}/sens/pv250hPa'.format(config['work_dir'],datea,config['storm'],metname)
+         outdir = '{0}/{1}/sens/pv250hPa'.format(config['figure_dir'],metname)
          if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -300,7 +300,7 @@ class ComputeSensitivity:
          sens, sigv = computeSens(ens, emea, evar, metric)
          sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
 
-         outdir = '{0}/{1}.{2}/{3}/sens/e700hPa'.format(config['work_dir'],datea,config['storm'],metname)
+         outdir = '{0}/{1}/sens/e700hPa'.format(config['figure_dir'],metname)
          if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -326,7 +326,7 @@ class ComputeSensitivity:
          sens, sigv = computeSens(ens, emea, evar, metric)
          sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
 
-         outdir = '{0}/{1}.{2}/{3}/sens/e850hPa'.format(config['work_dir'],datea,config['storm'],metname)
+         outdir = '{0}/{1}/sens/e850hPa'.format(config['figure_dir'],metname)
          if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -359,7 +359,7 @@ class ComputeSensitivity:
          sens, sigv = computeSens(uens, umea, uvar, metric)
          sens[:,:] = sens[:,:] * np.sqrt(uvar[:,:])
 
-         outdir = '{0}/{1}.{2}/{3}/sens/u925hPa'.format(config['work_dir'],datea,config['storm'],metname)
+         outdir = '{0}/{1}/sens/u925hPa'.format(config['figure_dir'],metname)
          if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -368,7 +368,7 @@ class ComputeSensitivity:
          sens, sigv = computeSens(vens, vmea, vvar, metric)
          sens[:,:] = sens[:,:] * np.sqrt(vvar[:,:])
 
-         outdir = '{0}/{1}.{2}/{3}/sens/v925hPa'.format(config['work_dir'],datea,config['storm'],metname)
+         outdir = '{0}/{1}/sens/v925hPa'.format(config['figure_dir'],metname)
          if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -390,7 +390,7 @@ class ComputeSensitivity:
          sens, sigv = computeSens(ens, emea, evar, metric)
          sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
 
-         outdir = '{0}/{1}.{2}/{3}/sens/h500hPa'.format(config['work_dir'],datea,config['storm'],metname)
+         outdir = '{0}/{1}/sens/h500hPa'.format(config['figure_dir'],metname)
          if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -399,10 +399,6 @@ class ComputeSensitivity:
 
          plotDict['meanCntrs'] = np.arange(4800, 6000, 60)
          plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_h500hPa_sens.png'.format(outdir,datea,fhrt), plotDict)
-
-#      outdir = config['work_dir'] + "/" + datea + '.' + config['storm'] + '/' + metname + '/sens_sc/h500'
-#      if not os.path.isdir(outdir):
-#        os.makedirs(outdir)
 
 
       ensfile = '{0}/{1}_f{2}_q500-850hPa_ens.nc'.format(config['work_dir'],datea,fhrt)
@@ -419,7 +415,7 @@ class ComputeSensitivity:
          sens, sigv = computeSens(ens, emea, evar, metric)
          sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
 
-         outdir = '{0}/{1}.{2}/{3}/sens/q500-850hPa'.format(config['work_dir'],datea,config['storm'],metname)
+         outdir = '{0}/{1}/sens/q500-850hPa'.format(config['figure_dir'],metname)
          if not os.path.isdir(outdir):
             os.makedirs(outdir)
 
@@ -430,12 +426,10 @@ class ComputeSensitivity:
          plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_q500-850hPa_sens.png'.format(outdir,datea,fhrt), plotDict)
 
          if e_cnt > 0:
-            outdir = '{0}/{1}.{2}/{3}/sens_sc/q500-850hPa'.format(config['work_dir'],datea,config['storm'],metname)
+            outdir = '{0}/{1}/sens_sc/q500-850hPa'.format(config['figure_dir'],metname)
             if not os.path.isdir(outdir):
                os.makedirs(outdir)
 
             stceDict['meanCntrs'] = plotDict['meanCntrs']
             plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_q500-850hPa_sens.png'.format(outdir,datea,fhrt), stceDict)
-
-
 

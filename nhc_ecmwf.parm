@@ -15,9 +15,11 @@ model_dir=/tornlab_rit/torn/ecmwf
 work_dir=/rt11/torn/JHT/work_ecmwf
 output_dir=/rt11/torn/JHT/output_ecmwf
 script_dir=/home11/staff/torn/JHT-python
-html_dir=/home11/staff/torn/html/JHT/ECMWF
+figure_dir=/home11/staff/torn/html/JHT/ECMWF
 outgrid_dir=/home11/staff/torn/html/JHT/ECMWF/grid
 log_dir=/rt11/torn/JHT/log_ecmwf
+
+save_work_dir=True
 
 [vitals_plot]
 trackfile=track.png
