@@ -1,6 +1,6 @@
 
 [model]
-model_src=GFS
+model_src=GEFS
 io_module=gefs_opendap
 num_ens=30
 fcst_hour_int=12
