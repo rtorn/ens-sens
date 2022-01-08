@@ -5,8 +5,8 @@ import netCDF4 as nc
 import xarray as xr
 import numpy as np
 import datetime as dt
+import scipy.stats
 from SensPlotRoutines import plotVecSens, plotScalarSens, computeSens, writeSensFile
-import time
 
 class ComputeSensitivity:
     '''
@@ -70,6 +70,7 @@ class ComputeSensitivity:
       plotDict['plotTitle'] = '{0} F{1}'.format(datea,fhrt)
       plotDict['fileTitle'] = 'TEST JHT-Torn ECMWF Sensitivity'
       plotDict['initDate']  = '{0}-{1}-{2} {3}:00:00'.format(datea[0:4],datea[4:6],datea[6:8],datea[8:10])
+      plotDict['sig_value'] = scipy.stats.t.ppf(q=1.0-float(plotDict.get('significance_level','.05'))/2,df=self.nens)
 
       stceDict = plotDict.copy()
       stceDict['output_sens']=False
@@ -128,6 +129,7 @@ class ComputeSensitivity:
       metric = metric[:] - np.mean(metric, axis=0)
 
       plotDict['sensmax'] = np.std(metric) * 0.9
+      plotDict['sig_value'] = scipy.stats.t.ppf(q=1-.05/2,df=self.nens)
 
       #  Read major axis direction if appropriate  
       if hasattr(mfile.variables['fore_met_init'],'units'):

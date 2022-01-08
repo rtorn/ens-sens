@@ -126,6 +126,9 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
 
   if proj == 'NorthPolarStereo':
      projinfo = ccrs.NorthPolarStereo(central_longitude=0.0)
+  elif proj == 'LambertConformal':
+     projinfo = ccrs.LambertConformal(central_longitude=DomDict['central_longitude'], \
+                                      standard_parallels=(DomDict['standard_parallel1'], DomDict['standard_parallel2']))
   elif (lon1 < 180. and lon2 > 180.):
      projinfo = ccrs.PlateCarree(central_longitude=180.)
   else:
@@ -199,6 +202,7 @@ def computeSens(ens, emea, evar, metric):
 
   Attributes:
       ens    (float):  array that contains the ensemble estimate of a field
+      emea   (float):  array that ccontains the ensemble mean of a foreast field
       evar   (float):  array that is the ensemble variance of forecast field
       metric (float):  vector of ensemble estimates of forecast metric
   '''
@@ -346,6 +350,8 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
   tcLat      = plotDict.get('tcLat', -9999.)
   tcLon      = plotDict.get('tcLon', -9999.)
 
+  sigval     = plotDict.get('sig_value', 2.007)
+
   gridInt    = float(plotDict.get('grid_interval', 10.))
 
   colorlist = ("#9A32CD","#00008B","#3A5FCD","#00BFFF","#B0E2FF","#FFFFFF","#FFEC8B","#FFA500","#FF4500","#B22222","#FF82AB")
@@ -361,12 +367,13 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
 
   #  create ensemble-mean contours, sensitivity field, and stat. sig
   if plotDict.get('zero_non_sig_sens','False') == 'True':
-     sens[sigv < 2.007] = 0.
+     sens[sigv < sigval] = 0.
 
   pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both',transform=ccrs.PlateCarree())
   pltm = plt.contour(lon[:],lat[:],emea,plotDict.get('meanCntrs'),linewidths=1.5, colors='k', zorder=10,transform=ccrs.PlateCarree())
-  plts = plt.contour(lon[:],lat[:],sigv,[-2.007, 2.007], linewidths=1.0, colors='k',transform=ccrs.PlateCarree())
-  plth = plt.contourf(lon[:],lat[:],sigv,[-2.007, 2.007],hatches=['..', None, '..'], colors='none', extend='both',transform=ccrs.PlateCarree())
+  plts = plt.contour(lon[:],lat[:],sigv,[-sigval, sigval], linewidths=1.0, colors='k',transform=ccrs.PlateCarree())
+  if plotDict.get('zero_non_sig_sens','False') == 'False':
+     plth = plt.contourf(lon[:],lat[:],sigv,[-sigval, sigval],hatches=['..', None, '..'], colors='none', extend='both',transform=ccrs.PlateCarree())
 
   if 'plotTitle' in plotDict:
     plt.title(plotDict['plotTitle'])
@@ -420,7 +427,7 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
   tcLat      = plotDict.get('tcLat', -9999.)
   tcLon      = plotDict.get('tcLon', -9999.)
 
-  gridInt    = float(plotDict.get('grid_interval', 10.))
+  sigval     = plotDict.get('sig_value', 2.007)
   barbInt    = int(plotDict.get('barb_interval', 6))
 
   colorlist = ("#9A32CD","#00008B","#3A5FCD","#00BFFF","#B0E2FF","#FFFFFF","#FFEC8B","#FFA500","#FF4500","#B22222","#FF82AB")
@@ -436,13 +443,14 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
 
   #  create ensemble-mean vectors, sensitivity field, and stat. sig
   if plotDict.get('zero_non_sig_sens','False') == 'True':
-     sens[sigv < 2.007] = 0.
+     sens[sigv < sigval] = 0.
 
   pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both',transform=ccrs.PlateCarree())
   pltm = plt.barbs(lon[::barbInt], lat[::barbInt], umea[::barbInt,::barbInt]*1.94, vmea[::barbInt,::barbInt]*1.94, \
                     pivot='middle', length=6, linewidths=0.2, zorder=10, transform=ccrs.PlateCarree())
-  plts = plt.contour(lon[:],lat[:],sigv,[-2.007, 2.007], linewidths=0.5, colors='k', transform=ccrs.PlateCarree())
-  plth = plt.contourf(lon[:],lat[:],sigv,[-2.007, 2.007],hatches=['..', None, '..'], colors='none', extend='both', transform=ccrs.PlateCarree())
+  plts = plt.contour(lon[:],lat[:],sigv,[-sigval, sigval], linewidths=0.5, colors='k', transform=ccrs.PlateCarree())
+  if plotDict.get('zero_non_sig_sens','False') == 'False':
+     plth = plt.contourf(lon[:],lat[:],sigv,[-sigval, sigval],hatches=['..', None, '..'], colors='none', extend='both', transform=ccrs.PlateCarree())
 
   if 'plotTitle' in plotDict:
     plt.title(plotDict['plotTitle'])
