@@ -70,6 +70,7 @@ if config['model_src'] == 'ECMWF':
 elif config['model_src'] == 'GEFS':
   model_str = "kwbc"
   model_num = "1/2/3/4/5/6/7/8/9/10/11/12/13/14/15/16/17/18/19/20/21/22/23/24/25/26/27/28/29/30"
+#  model_num = "1/2/3/4/5/6/7/8/9/10/11/12/13/14/15/16/17/18/19/20"
 
 atmres = config.get('tigge_forecast_grid_space','1.0/1.0')
 sfcres = "0.25/0.25"
@@ -259,4 +260,10 @@ for t in range(len(hlist)):
                    -grib {1} >& /dev/null".format(pcpstr,gribout))
      os.system("cat grib_hrsfc_pf.out | grep \"{0}\" | wgrib2 -fix_ncep -i -append tigge_output_hrsfc_pf.grib \
                    -grib {1} >& /dev/null".format(pcpstr,gribout))
+
+for i in range(len(ftype)):
+   os.remove("tigge_output_{0}_pf.grib".format(ftype[i]))
+   os.remove("tigge_output_{0}_cf.grib".format(ftype[i]))
+   os.remove("grib_{0}_pf.out".format(ftype[i]))
+   os.remove("grib_{0}_cf.out".format(ftype[i]))
 
