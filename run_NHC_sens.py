@@ -131,6 +131,9 @@ def main():
        bbl = "wp"
 
     bbnnyyyy = "{0}{1}{2}".format(bbl, storm[-3:-1], datea[0:4])
+
+    for handler in logging.root.handlers[:]:
+       logging.root.removeHandler(handler)
     logging.basicConfig(filename='{0}/{1}_{2}.log'.format(config.get('log_dir','.'),str(datea),storm), \
                                filemode='w', format='%(asctime)s;%(message)s')
     logging.warning("STARTING SENSITIVITIES for {0} on {1}".format(bbnnyyyy, str(datea)))
