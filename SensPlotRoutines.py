@@ -1,3 +1,5 @@
+import os
+import pandas as pd
 import matplotlib
 from IPython.core.pylabtools import figsize, getfigs
 import json
@@ -31,25 +33,39 @@ def addDrop(dropfile, plt, plotDict):
   mcolor = plotDict.get('drop_mark_color', 'black') 
   mtype  = plotDict.get('drop_mark_type', '+')
 
-  try:
-    with open(dropfile, 'r') as fdrop:
-      intext = fdrop.readlines()
+  if os.path.isfile(dropfile):
 
-      ndrops = len(intext)-14
-      droplat = np.zeros(ndrops)
-      droplon = np.zeros(ndrops)
+     droptype = plotDict.get('drop_file_type','nhc')
 
-      #  Loop over dropsonde locations, convert text to lat/lon, plot
-      for i in range(ndrops):
-        str1 = intext[13+i]
-        droplat[i] = float(str1[7:9]) + float(str1[10:12])/60.
-        droplon[i] = float(str1[16:20]) + np.sign(float(str1[16:20]))*float(str1[21:23])/60.
+     if droptype == 'nhc':
 
-      plt.plot(droplon, droplat, mtype, color=mcolor, markersize=msize)
-      fdrop.close()
+        fdrop = open(dropfile, 'r')
+        intext = fdrop.readlines()
 
-  except FileNotFoundError:
-    pass
+        ndrops = len(intext)-14
+        droplat = np.zeros(ndrops)
+        droplon = np.zeros(ndrops)
+
+        #  Loop over dropsonde locations, convert text to lat/lon, plot
+        for i in range(ndrops):
+           str1 = intext[13+i]
+           droplat[i] = float(str1[7:9]) + float(str1[10:12])/60.
+           droplon[i] = float(str1[16:20]) + np.sign(float(str1[16:20]))*float(str1[21:23])/60.
+
+        plt.plot(droplon, droplat, mtype, color=mcolor, markersize=msize, transform=ccrs.PlateCarree())
+        fdrop.close()
+
+     elif droptype == 'cw3e':
+
+        ds = pd.read_csv(filepath_or_buffer=dropfile, header=None)
+        ds.columns = ['year','month','day','hour','minute','latitude','longitude','pressure']
+        if eval(plotDict.get('flip_lon','False')):
+           ds['longitude'] = (360. - ds['longitude']) % 360.
+        else:
+           ds['longitude'] = -ds['longitude']
+        plt.plot(ds['longitude'], ds['latitude'], mtype, color=mcolor, markersize=msize, transform=ccrs.PlateCarree())
+        print(ds['longitude'])
+        del ds
 
 
 def addRangeRings(cen_lat, cen_lon, lat, lon, plt, plotDict):
@@ -111,6 +127,30 @@ def addRawin(rawinfile, plt, plotDict):
     pass
 
 
+def set_projection(proj, lon1, lon2, DomDict):
+  '''
+  Function that creates a projection object for plotting.
+
+  Attributes:
+      proj (string):  String that contains name of projection for plot
+      lon1 (float):   minimum longitude of the plot
+      lon2 (float):   maximum longitude of the plot
+      DomDict(dict.):  Dictionary that contains plot preferences
+  '''
+
+  if proj == 'NorthPolarStereo':
+     projinfo = ccrs.NorthPolarStereo(central_longitude=0.0)
+  elif proj == 'LambertConformal':
+     projinfo = ccrs.LambertConformal(central_latitude=DomDict['central_latitude'], central_longitude=DomDict['central_longitude'], \
+                                      standard_parallels=(DomDict['standard_parallel1'], DomDict['standard_parallel2']))
+  elif (lon1 < 180. and lon2 > 180.):
+     projinfo = ccrs.PlateCarree(central_longitude=180.)
+  else:
+     projinfo = ccrs.PlateCarree()
+
+  return projinfo
+
+
 def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
   '''
   Function that creates a background map for plotting.
@@ -124,15 +164,10 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
       DomDict(dict.):  Dictionary that contains plot preferences
   '''
 
-  if proj == 'NorthPolarStereo':
-     projinfo = ccrs.NorthPolarStereo(central_longitude=0.0)
-  elif proj == 'LambertConformal':
-     projinfo = ccrs.LambertConformal(central_longitude=DomDict['central_longitude'], \
-                                      standard_parallels=(DomDict['standard_parallel1'], DomDict['standard_parallel2']))
-  elif (lon1 < 180. and lon2 > 180.):
-     projinfo = ccrs.PlateCarree(central_longitude=180.)
+  if 'projection' in DomDict:
+     projinfo = DomDict.get('projection')
   else:
-     projinfo = ccrs.PlateCarree()
+     projinfo = set_projection(proj, lon1, lon2, DomDict)
 
   if eval(DomDict.get('subplot','False')):
 
@@ -142,7 +177,7 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
   else:
 
      ax = plt.axes(projection=projinfo)
- 
+
   states = NaturalEarthFeature(category="cultural", scale="50m",
                                facecolor="none", name="admin_1_states_provinces")
   ax.add_feature(states, linewidth=0.5, edgecolor="black")
@@ -182,6 +217,7 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
      gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
                      linewidth=1, color='gray', alpha=0.5, linestyle='-')
      gl.top_labels = None
+     gl.bottom_labels = eval(DomDict.get('bottom_labels','True'))
      gl.left_labels = eval(DomDict.get('left_labels','None'))
      gl.right_labels = eval(DomDict.get('right_labels','True'))
      gl.xlocator = mticker.FixedLocator(np.arange(-180.,180.,gridInt))
@@ -371,7 +407,7 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
 
   pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both',transform=ccrs.PlateCarree())
   pltm = plt.contour(lon[:],lat[:],emea,plotDict.get('meanCntrs'),linewidths=1.5, colors='k', zorder=10,transform=ccrs.PlateCarree())
-  plts = plt.contour(lon[:],lat[:],sigv,[-sigval, sigval], linewidths=1.0, colors='k',transform=ccrs.PlateCarree())
+  plts = plt.contour(lon[:],lat[:],sigv,[-sigval, sigval], linewidths=0.5, colors='k',transform=ccrs.PlateCarree())
   if plotDict.get('zero_non_sig_sens','False') == 'False':
      plth = plt.contourf(lon[:],lat[:],sigv,[-sigval, sigval],hatches=['..', None, '..'], colors='none', extend='both',transform=ccrs.PlateCarree())
 
