@@ -23,7 +23,7 @@ def plot_ens_tc_track(atcf, storm, datea, config):
     deg2rad      = np.radians(180.)/180.
 
     output_dir = config['vitals_plot'].get('track_output_dir', '.')
-    fhrint  = float(config['vitals_plot'].get('fhrint',6))
+    fhrint  = float(config['vitals_plot'].get('forecast_hour_int',6))
     fhrmax  = float(config['vitals_plot'].get('forecast_hour_max',120))
 
     ntimes = int(fhrmax / fhrint) + 1
@@ -213,7 +213,7 @@ def plot_ens_tc_intensity(atcf, storm, datea, config):
     '''
 
     output_dir = config['vitals_plot'].get('int_output_dir', '.')
-    fhrint     = float(config['vitals_plot'].get('fhrint',6))
+    fhrint     = float(config['vitals_plot'].get('forecast_hour_int',6))
     fhrmax     = float(config['vitals_plot'].get('forecast_hour_max',120))
     plot_best  = eval(config['vitals_plot'].get('plot_best', 'True'))
 
