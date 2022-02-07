@@ -18,17 +18,21 @@ figure_dir=/home11/staff/torn/html/JHT/GEFS
 outgrid_dir=/home11/staff/torn/html/JHT/GEFS/grid
 log_dir=/rt11/torn/JHT/log_gefs
 
+save_work_dir=True
+
 [vitals_plot]
 trackfile=track.png
 intfile=intensity.png
 forecast_hour_max=144
 
 [metric]
-metric_hours=[0, 72]
+metric_hours=[0, 48]
 int_track_fhr1=24
-int_track_fhr2=120
+#int_track_fhr2=120
+int_track_fhr2=72
 track_eof_member_frac = 0.3
-intensity_eof_hour_final=96
+#intensity_eof_hour_final=96
+intensity_eof_hour_final=48
 intensity_eof_member_frac = 0.3
 kinetic_energy_metric=False
 wind_speed_eof_metric=False
@@ -48,10 +52,6 @@ max_lon=-10.0
 
 [sens]
 metrics=f120_intmajtrack, f096_intmslp
-#min_lat=8.0
-#max_lat=65.0
-#min_lon=-140.0
-#max_lon=-20.0
 grid_interval=10.
 barb_interval=9
 dropsonde_file=./2019083100_drop_info.tx
