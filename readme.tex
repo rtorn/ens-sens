@@ -66,7 +66,7 @@ The outcome of running this code is a set of output directories that include the
 gridded sensitivity output.  The format of these directory is:
 
 \vspace{0.1in}
-\{html\_dir\}/\{storm\}\_\{yyyymmddhh\}/\{metric\}/sens/\{field\},
+\{figure\_dir\}/\{storm\}\_\{yyyymmddhh\}/\{metric\}/sens/\{field\},
 \vspace{0.1in}
 
 where storm is the name of the TC (same as --storm line above), yyyymmddhh is the initialization date
@@ -108,7 +108,7 @@ h500 & 500 hPa height \\ \hline
 \begin{table}[H]
 \caption{Configuration options for the model subset.}
 \begin{center}
-\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\begin{tabular}{|p{1.75in}|p{0.5in}|p{4.00in}|}
 \hline
 Parameter Name & Type & Description \\  \hline\hline
 model\_src & string & Name of the model being used in the sensitivity calculation.  This is mainly used in
@@ -121,6 +121,10 @@ fcst\_hour\_int & integer & Forecast hour interval for computing forecast fields
 calculations in hours.  Default:  12 h \\  \hline
 fcst\_hour\_max & integer & Last forecast hour to compute forecast fields for sensitvity 
 calculations in hours.  Default 120 h \\  \hline
+tigge\_forecast\_time & string & List of forecast hours to read from ECMWF TIGGE archive. \\ \hline
+tigge\_forecast\_grid\_space & string & Requested grid spacing for data pulled from the 
+TIGGE respository.  Default: 1.0/1.0 (one degree) \\ \hline
+flip\_lon & boolean & Swap longitude from -180 to 180 to 0 to 360.  Default False \\ \hline
 \end{tabular}
 \end{center}
 \end{table}
@@ -128,23 +132,31 @@ calculations in hours.  Default 120 h \\  \hline
 \begin{table}[H]
 \caption{Configuration options for the local subset.}
 \begin{center}
-\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\begin{tabular}{|p{1.60in}|p{0.5in}|p{4.15in}|}
 \hline
 Parameter Name & Type & Description \\ \hline\hline
 atcf\_dir & string & Path to raw ATCF forecast data on local server.  No default value \\ \hline
 model\_dir & string & Path to raw model data on local server.  No default value \\ \hline
+best\_dir & string & Path to best track data on local server.  No default value \\ \hline
 work\_dir & string & Path to work directory where sensitivity calculations are carried out
 No default value. \\ \hline
 output\_dir & string & Path to directory to save certain output of the sensitivity 
 calculations, if desired.  No default value.  \\ \hline
 script\_dir & string & Path to python scripts and modules (i.e., where this code is located.)
 No default value. \\ \hline
-html\_dir & string & Path to directory where output figures will be placed.
+figure\_dir & string & Path to directory where output figures will be placed.
 No default value.  \\ \hline
 outgrid\_dir & string & Path to directory where gridded sensitivity output will be placed.
 No default value.  \\ \hline
 log\_dir & string & Path to directory where log file output from the python logging function
 will be placed.  No default value. \\ \hline
+archive\_metric & boolean & True to save metric netcdf files into the appropriate 
+output\_dir.  Default: False \\ \hline
+archive\_fields & boolean & True to save forecast field netcdf files into the appropriate
+output\_dir.  Default: False \\ \hline
+save\_work\_dir & boolean & True to save work directory at the end of the execution.
+Default:  False \\ \hline
+
 \end{tabular}
 \end{center}
 \end{table}
@@ -152,15 +164,21 @@ will be placed.  No default value. \\ \hline
 \begin{table}[H]  
 \caption{Configuration options for the vitals\_plot subset.}
 \begin{center}
-\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\begin{tabular}{|p{1.60in}|p{0.5in}|p{4.15in}|}
 \hline
 Parameter Name & Type & Description \\ \hline \hline
 trackfile & string & Name of figure that shows the TC track forecast.  Default:  track.png \\ \hline
+track\_output\_dir & string & Name of directory to place the track plot.  Default: figure\_dir from above \\ \hline
 intfile & string & Name of figure that shows the TC intensity forecast.  Default:  intensity.png \\ \hline
+int\_output\_dir & string & Name of directory to place the intensity plot.  Default: figure\_dir from above \\ \hline
+forecast\_hour\_int & float & Frequency of forecasts from model (hours).  Default: 6 \\ \hline
 forecast\_hour\_max & string & Maximum forecast hour for track and intensity plots.  
 Default:  120 hours \\ \hline
-grid\_interval & float & Latitude and Longitude line grid interval in degrees.  
-Default:  5$^{\circ}$.  \\ \hline
+plot\_ellipse & boolean & True to plot TC position ellipses on plots.  Default:  True \\ \hline
+ellipse\_frequency & float & Frequency to plot the position ellipses (hours).  Default: 24 \\ \hline
+plot\_best & boolean & True to plot best track information, if available.  Default:  True \\ \hline
+projection & string & Map projection to use for vitals plot.  Default:  PlateCarree \\ \hline
+grid\_interval & float & Latitude and Longitude line grid interval (degrees).  Default:  5 \\ \hline
 \end{tabular}
 \end{center}
 \end{table}
@@ -168,18 +186,34 @@ Default:  5$^{\circ}$.  \\ \hline
 \begin{table}[H]
 \caption{Configuration options for the metric subset.}
 \begin{center}
-\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\begin{tabular}{|p{1.75in}|p{0.5in}|p{4.00in}|}
 \hline
 Parameter Name & Type & Description \\ \hline \hline
 metric\_hours & float & Vector list of forecast hours to compute forecast metrics.  No default value \\ \hline
-int\_track\_fhr1 & float & Initial forecast hour to use for integrated track metric.  Default:  24~h \\ \hline
-int\_track\_fhr1 & float & Final forecast hour to use for integrated track metric.  Default:  120~h \\ \hline
-kinetic\_energy\_metric & logical & True to calculate area-average kinetic energy metric.
-Default:  False \\ \hline
-precipitation\_eof\_metric & logical & True to calculate forecast metric that is EOF/PC of the 
+track\_eof\_hour\_init & float & Initial forecast hour to use for integrated track metric (hours).  Default: 24 \\ \hline
+track\_eof\_hour\_int & float & Forecast hour interval to use for integrated track metric (hours).  Default:  6 \\ \hline
+track\_eof\_hour\_final & float & Final forecast hour to use for integrated track metric (hours).  Default: 120 \\ \hline
+track\_eof\_member\_frac & float & Fraction of members that need to be present during a forecast hour for track EOF.  Default:  0.3 \\ \hline
+track\_eof\_esign & float & Factor to multiply EOF PC by.  Default 1.0 \\ \hline
+intensity\_eof\_hour\_init & float & Initial forecast hour to use for integrated intensity metric (hours).  Default: 24 \\ \hline
+intensity\_eof\_hour\_int & float & Forecast hour interval to use for integrated intensity metric (hours).  Default:  6 \\ \hline
+intensity\_eof\_hour\_final & float & Final forecast hour to use for integrated intensity metric (hours).  Default: 96 \\ \hline
+intensity\_eof\_member\_frac & float & Fraction of members that need to be present during a forecast hour for intensity EOF.  Default:  0.3 \\ \hline
+kinetic\_energy\_metric & boolean & True to calculate area-average kinetic energy metric.  Default:  False \\ \hline
+kinetic\_energy\_radius & float & Radius over which to calculate the average kinetic energy (km).  Default:  200 \\ \hline
+kinetic\_energy\_level & float & Pressure level to use for kinetic energy metric (hPa).  Default: 1000 \\ \hline
+wind\_speed\_eof\_metric & boolean & True to calculate forecast metric that is EOF/PC of the
+wind speed over the specified time window and area.  Currently experimental.  Default:  False \\ \hline
+wind\_metric\_file & string & Path to file that contains precipitation EOF metric settings.
+Assumes the file has the format \{yyyymmddhh\}\_\{storm\}\_wind.  No default value. \\ \hline
+precipitation\_metric & boolean & True to calculate forecast metric that is the average
+precipitation over the specified time window and area.  Currently experimental.  Default:  False \\ \hline
+precipitation\_eof\_metric & boolean & True to calculate forecast metric that is EOF/PC of the 
 precipitation over the specified time window and area.  Currently experimental.  Default:  False \\ \hline
 precip\_metric\_file & string & Path to file that contains precipitation EOF metric settings.  
 Assumes the file has the format \{yyyymmddhh\}\_\{storm\}\_precip.  No default value. \\ \hline
+projection & string & Map projection to use for metric plot.  Default:  PlateCarree \\ \hline
+grid\_interval & float & Latitude and Longitude line grid interval (degrees).  Default:  5 \\ \hline
 \end{tabular}
 \end{center}
 \end{table}
@@ -187,24 +221,27 @@ Assumes the file has the format \{yyyymmddhh\}\_\{storm\}\_precip.  No default v
 \begin{table}[H]
 \caption{Configuration options for the field subset.}
 \begin{center}
-\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\begin{tabular}{|p{1.60in}|p{0.5in}|p{4.15in}|}
 \hline
 Parameter Name & Type & Description \\ \hline \hline
-calc\_steer\_circ & logical & True to compute the circulation/vorticity from the steering wind.  
-Default:  False \\ \hline
-calc\_height & logical & True to compute gepotential height on specified pressure levels.  Default:  True \\ \hline
-height\_levels & float & List of pressure levels to compute the geopotential height.
+calc\_uvsteer & boolean & True to compute the u/v component of the steering wind. Default: True \\ \hline
+calc\_steer\_circ & boolean & True to compute the circulation/vorticity from the steering wind.  Default:  False \\ \hline
+steer\_level1 & float & Lowest pressure level to use to compute the layer-average steering wind (hPa).  Default: 300 \\ \hline
+steer\_level2 & float & Highest pressure level to use to compute the layer-average steering wind (hPa).  Default: 850 \\ \hline
+steer\_radius & float & Radius to use for removing the TC from the model fields (km).  Default: 333 \\ \hline
+calc\_height & boolean & True to compute gepotential height on specified pressure levels.  Default:  True \\ \hline
+height\_levels & float & List of pressure levels to compute the geopotential height (hPa).
 Default:  500 \\ \hline
-calc\_pv250hPa & logical & True to compute PV on the 250 hPa surface.  Default:  True \\ \hline
-calc\_theta-e & logical & True to compute equivalent potential temperature at specified pressure levels.
+calc\_pv250hPa & boolean & True to compute PV on the 250 hPa surface.  Default:  True \\ \hline
+calc\_theta-e & boolean & True to compute equivalent potential temperature at specified pressure levels.
 Default:  False \\ \hline
-theta-e\_levels & float & List of pressure levels to compute equivalent potential temperature.
+theta-e\_levels & float & List of pressure levels to compute equivalent potential temperature (hPa).
 Default:  700, 850 \\ \hline
-calc\_q500-850hPa & logical & True to compute the integrated water vapor between 500 and 
+calc\_q500-850hPa & boolean & True to compute the integrated water vapor between 500 and 
 850~hPa.  Default:  False \\ \hline
-calc\_winds & logical & True to compute zonal and meridional wind at specified pressure levels.
+calc\_winds & boolean & True to compute zonal and meridional wind at specified pressure levels.
 Default:  False \\ \hline
-wind\_levels & float & List of pressure levels to compute zonal and meridional wind.
+wind\_levels & float & List of pressure levels to compute zonal and meridional wind (hPa).
 Default:  850 \\ \hline
 min\_lat & float & Minimum latitude to compute forecast fields over.  Default:  0.0 \\ \hline
 max\_lat & float & Maximum latitude to compute forecast fields over.  Default:  65.0 \\ \hline
@@ -218,11 +255,10 @@ max\_lon & float & Maximum longitude to compute forecast fields over.  Default: 
 \caption{Configuration options for the sens subset.  This set of parameters set the display options
 for the sensitivity plots.}
 \begin{center}
-\begin{tabular}{|p{1.25in}|p{0.5in}|p{4.5in}|}
+\begin{tabular}{|p{1.60in}|p{0.5in}|p{4.15in}|}
 \hline
 Parameter Name & Type & Description \\  \hline \hline
-metrics & string & List of names of forecast metrics to compute the sensitivity to.  
-Default:  none \\ \hline
+metrics & string & List of names of forecast metrics to compute the sensitivity to.  Default:  none \\ \hline
 min\_lat & float & Minimum latitude for sensitivity plots.  Default:  8.0, also set in
 run\_NHC\_sens.py based on basin.  \\ \hline
 max\_lat & float & Maximum latitude for sensitivity plots.  Default:  65.0, also set in
@@ -231,24 +267,24 @@ min\_lon & float & Minimum longitude for sensitivity plots.  Default:  -140.0, a
 run\_NHC\_sens.py based on basin.  \\ \hline
 max\_lon & float & Maximum longitude for sensitivity plots.  Default:  -20.0, also set in
 run\_NHC\_sens.py based on basin.  \\ \hline
-zero\_non\_sig\_sens & logical & True to plot only the statistically significant 
+zero\_non\_sig\_sens & boolean & True to plot only the statistically significant 
 sensitivity locations.  Default:  False   \\ \hline
-grid\_interval & float & Latitude and Longitude line grid interval in degrees.
-Default:  10$^{\circ}$.  \\ \hline
+grid\_interval & float & Latitude and Longitude line grid interval (degrees).  Default:  10$^{\circ}$.  \\ \hline
 barb\_interval & integer & Number of grid points in between each wind barb in the plot.
 Default:  6 grid points  \\ \hline
 dropsonde\_file & string & Full path to file of dropsonde locations.  Default:  none \\ \hline
+drop\_file\_type & string & Type of dropsonde file to read. Default: nhc \\ \hline
 drop\_mark\_size & integer &  Marker size of dropsonde locations in plot.  Default:  6 \\ \hline
 drop\_mark\_color & string & Dropsonde marker color in plot.  Default: black \\ \hline
 drop\_mark\_type & string & Dropsonde marker in plot.  Default: + \\ \hline
 rawinsonde\_file & string & Full path to file of rawinsonde locations.  Default:  none \\ \hline
 rawin\_mark\_size & integer & Marker size of rawinsonde locations in plot.  Default:  6 \\ \hline
 rawin\_mark\_color & string & Rawinsonde marker color in plot.  Default: gray \\ \hline
-range\_rings & logical & True to plot range rings from the predicted TC center.  Default: True \\ \hline
+range\_rings & boolean & True to plot range rings from the predicted TC center.  Default: True \\ \hline
 ring\_values & floats & List of range ring radii for plot in km.  Default:  \\ \hline
-output\_sens & logical & True to create netCDF file that contains gridded sensitivity 
+output\_sens & boolean & True to create netCDF file that contains gridded sensitivity 
 fields that can be used in AWIPS or traveling salesman.  Default:  True \\ \hline
-nhc\_sens & logical & True to create NHC version of the gridded netCDF file, which means that
+nhc\_sens & boolean & True to create NHC version of the gridded netCDF file, which means that
 it includes a variable that is the absolute value of sensitivity (for traveling salesman software).
 Default:  False \\ \hline
 \end{tabular}
