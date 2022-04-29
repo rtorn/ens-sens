@@ -31,7 +31,7 @@ def plot_ens_tc_track(atcf, storm, datea, config):
 
     subcolors = ["Blue", "DarkOrange"]
     ellcol = ["#551A8B", "#00FFFF", "#00EE00", "#FF0000", "#FF00FF", "#551A8B", "#00FFFF", "#00EE00", "#FF0000"]
-    plot_best = eval(config['vitals_plot'].get('plot_best', 'True'))
+    plot_best = eval(config['vitals_plot'].get('plot_best', 'False'))
 
     minLat =  90.
     maxLat = -90.
@@ -73,10 +73,11 @@ def plot_ens_tc_track(atcf, storm, datea, config):
         x = []
         y = []
         for t in range(ntimes):
-            if all_lat[n,t] != atcf.missing and all_lon[n,t] != atcf.missing:
-                y.append(all_lat[n,t])
-                x.append(all_lon[n,t])
-        ax.plot(x, y, color='gray', zorder=1, transform=ccrs.PlateCarree())
+           if all_lat[n,t] != atcf.missing and all_lon[n,t] != atcf.missing:
+              y.append(all_lat[n,t])
+              x.append(all_lon[n,t])
+        if len(x) > 0:
+           ax.plot(x, y, color='gray', zorder=1, transform=ccrs.PlateCarree())
 
     # Plot best track position
     fhrbest = []
@@ -145,7 +146,8 @@ def plot_ens_tc_track(atcf, storm, datea, config):
                      m_lon = m_lon + all_lon[n,t]
                      pcnt = pcnt + 1
              if pcnt > 0:
-                ax.scatter(e_lon[0:(pcnt-1)], e_lat[0:(pcnt-1)], s=4, marker='o', color=ellcol[color_index], zorder=12)
+                ax.scatter(e_lon[0:(pcnt-1)], e_lat[0:(pcnt-1)], s=4, marker='o', color=ellcol[color_index], \
+                                 zorder=12, transform=ccrs.PlateCarree())
              if pcnt <= 2:
                 break
 

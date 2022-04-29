@@ -769,7 +769,8 @@ class ComputeForecastMetrics:
             if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
               y.append(ens_lat[n,t])
               x.append(ens_lon[n,t])
-          ax.plot(x, y, color='lightgray', zorder=1, transform=ccrs.PlateCarree())
+          if len(x) > 0:
+            ax.plot(x, y, color='lightgray', zorder=1, transform=ccrs.PlateCarree())
 
         #  Plot the ensemble mean and track perturbation
         ax.plot(m_lon, m_lat, color='black', linewidth=3, zorder=15, transform=ccrs.PlateCarree())        
