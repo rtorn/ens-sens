@@ -55,16 +55,26 @@ def addDrop(dropfile, plt, plotDict):
         plt.plot(droplon, droplat, mtype, color=mcolor, markersize=msize, transform=ccrs.PlateCarree())
         fdrop.close()
 
-     elif droptype == 'cw3e':
+     elif droptype == 'hrd':
 
-        ds = pd.read_csv(filepath_or_buffer=dropfile, header=None)
-        ds.columns = ['year','month','day','hour','minute','latitude','longitude','pressure']
+        ds = pd.read_csv(filepath_or_buffer=dropfile, header=None, sep = '\s+', skiprows=6, usecols=[0, 1, 2, 3, 4, 5])
+        ds.columns = ['seq','serial','date','time','latitude','longitude']
         if eval(plotDict.get('flip_lon','False')):
            ds['longitude'] = (360. - ds['longitude']) % 360.
         else:
            ds['longitude'] = -ds['longitude']
         plt.plot(ds['longitude'], ds['latitude'], mtype, color=mcolor, markersize=msize, transform=ccrs.PlateCarree())
-        print(ds['longitude'])
+        del ds
+
+     elif droptype == 'cw3e':
+
+        ds = pd.read_csv(filepath_or_buffer=dropfile, sep = '\s+', header=None)
+        ds.columns = ['year','month','day','hour','minute','latitude','longitude','pressure']
+        if eval(plotDict.get('flip_lon','False')):
+           ds['longitude'] = (360. - ds['longitude']) % 360
+        else:
+           ds['longitude'] = -ds['longitude']
+        plt.plot(ds['longitude'], ds['latitude'], mtype, color=mcolor, markersize=msize, transform=ccrs.PlateCarree())
         del ds
 
 
