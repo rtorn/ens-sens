@@ -187,6 +187,8 @@ class ReadGribFiles:
 
         self.has_specific_humidity = False
 
+        self.has_total_precip = False
+
         self.nens = int(len(self.ds_dict['hgtprs'].coords['ens']))
 
 

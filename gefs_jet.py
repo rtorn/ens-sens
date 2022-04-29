@@ -215,6 +215,8 @@ class ReadGribFiles:
         else:
            self.has_specific_humidity = False
 
+        self.has_total_precip = False
+
         self.nens = int(self.grib_dict['gh_pf'].attrs['GRIB_totalNumber']) + 1
 
 
