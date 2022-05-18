@@ -5,19 +5,18 @@ import json
 import numpy as np
 import datetime as dt
 import logging
+import configparser
 
 import matplotlib
 from IPython.core.pylabtools import figsize, getfigs
 import importlib
 import matplotlib.pyplot as plt
-import matplotlib.ticker as mticker
-import cartopy
 import cartopy.crs as ccrs
-from cartopy.feature import NaturalEarthFeature
-from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 
 from eofs.standard import Eof
 from eofs.xarray import Eof as Eof_xarray
+
+from SensPlotRoutines import background_map
 
 #####   Function to compute the great circle distance between two points
 def great_circle(lon1, lat1, lon2, lat2):
@@ -61,7 +60,7 @@ class ComputeForecastMetrics:
         #  Define class-specific variables
         self.fhr = None
         self.deg2rad = 0.01745
-        self.earth_radius = 6378388.
+        self.earth_radius = 6378.388
         self.missing = -9999.
         self.deg2km = self.earth_radius * np.radians(1)
 
@@ -70,7 +69,7 @@ class ComputeForecastMetrics:
         self.datea_str = datea
         self.datea = dt.datetime.strptime(datea, '%Y%m%d%H')
         self.datea_s = self.datea.strftime("%m%d%H%M")
-        self.outdir = config['output_dir']
+        self.outdir = config['work_dir']
         self.storm  = storm
 
         self.dpp = importlib.import_module(config['io_module'])
@@ -86,6 +85,15 @@ class ComputeForecastMetrics:
             self.ens_lat,  self.ens_lon  = self.atcf.ens_lat_lon_time(self.fhr)
             self.ens_lat1, self.ens_lon1 = self.atcf.ens_lat_lon_time(self.fhr - 6)
             self.ens_lat2, self.ens_lon2 = self.atcf.ens_lat_lon_time(self.fhr + 6)
+
+            e_cnt = 0
+            for n in range(self.nens):
+               if self.ens_lat[n] != self.atcf.missing and self.ens_lon[n] != self.atcf.missing:
+                   e_cnt = e_cnt + 1
+ 
+            #  Go to the next potential forecast hour if there are not enough members
+            if e_cnt <= 1:
+               continue
 
             #  Calculate the distance along major axis and along/across track distance
             self.forecast_maj_track, self.forecast_min_track = self.__f_metric_tc_el_track()
@@ -108,25 +116,25 @@ class ComputeForecastMetrics:
             axmag = alx * elx + aly * ely
 
             if abs(almag) > abs(axmag):
-              if almag < 0:
-                fmet = self.forecast_maj_track['data_vars']["fore_met_init"]['data']
-                self.forecast_maj_track['data_vars']["fore_met_init"]['data'] = list(-1.0 * np.array(fmet))
-                self.forecast_maj_track['attrs']['X_DIRECTION_VECTOR'] = -elx
-                self.forecast_maj_track['attrs']['Y_DIRECTION_VECTOR'] = -ely
-                fmet = self.forecast_min_track['data_vars']["fore_met_init"]['data']
-                self.forecast_min_track['data_vars']["fore_met_init"]['data'] = list(-1.0 * np.array(fmet))
-                self.forecast_min_track['attrs']['X_DIRECTION_VECTOR'] = -elx
-                self.forecast_min_track['attrs']['Y_DIRECTION_VECTOR'] = -ely
+               if almag < 0:
+                  fmet = self.forecast_maj_track['data_vars']["fore_met_init"]['data']
+                  self.forecast_maj_track['data_vars']["fore_met_init"]['data'] = list(-1.0 * np.array(fmet))
+                  self.forecast_maj_track['attrs']['X_DIRECTION_VECTOR'] = -elx
+                  self.forecast_maj_track['attrs']['Y_DIRECTION_VECTOR'] = -ely
+                  fmet = self.forecast_min_track['data_vars']["fore_met_init"]['data']
+                  self.forecast_min_track['data_vars']["fore_met_init"]['data'] = list(-1.0 * np.array(fmet))
+                  self.forecast_min_track['attrs']['X_DIRECTION_VECTOR'] = -elx
+                  self.forecast_min_track['attrs']['Y_DIRECTION_VECTOR'] = -ely
             else:
-              if axmag < 0:
-                fmet = self.forecast_maj_track['data_vars']["fore_met_init"]['data']
-                self.forecast_maj_track['data_vars']["fore_met_init"]['data'] = list(-1.0 * np.array(fmet))
-                self.forecast_maj_track['attrs']['X_DIRECTION_VECTOR'] = -elx
-                self.forecast_maj_track['attrs']['Y_DIRECTION_VECTOR'] = -ely
-                fmet = self.forecast_min_track['data_vars']["fore_met_init"]['data']
-                self.forecast_min_track['data_vars']["fore_met_init"]['data'] = list(-1.0 * np.array(fmet))
-                self.forecast_min_track['attrs']['X_DIRECTION_VECTOR'] = -elx
-                self.forecast_min_track['attrs']['Y_DIRECTION_VECTOR'] = -ely
+               if axmag < 0:
+                  fmet = self.forecast_maj_track['data_vars']["fore_met_init"]['data']
+                  self.forecast_maj_track['data_vars']["fore_met_init"]['data'] = list(-1.0 * np.array(fmet))
+                  self.forecast_maj_track['attrs']['X_DIRECTION_VECTOR'] = -elx
+                  self.forecast_maj_track['attrs']['Y_DIRECTION_VECTOR'] = -ely
+                  fmet = self.forecast_min_track['data_vars']["fore_met_init"]['data']
+                  self.forecast_min_track['data_vars']["fore_met_init"]['data'] = list(-1.0 * np.array(fmet))
+                  self.forecast_min_track['attrs']['X_DIRECTION_VECTOR'] = -elx
+                  self.forecast_min_track['attrs']['Y_DIRECTION_VECTOR'] = -ely
 
             #  Compute metric that is distance from the ensemble-mean position
             fore_met_min = self.forecast_min_track['data_vars']["fore_met_init"]['data']
@@ -141,9 +149,9 @@ class ComputeForecastMetrics:
 #            if f_missing < f_max_miss or self.fhr <= 0.0:
 #               if self.fhr > 0.0:
 #                  f_met0 = self.forecast_maj_track_0['data_vars']["fore_met_init"]['data']
-#                mdist = np.mean(f_met0)
-#                vf_met0 = np.var(f_met0)
-#                out_stat[1] = max(np.log(np.sqrt(vmaj) / (max(np.sqrt(vf_met0), 10.0))), 1.0)
+#               mdist = np.mean(f_met0)
+#               vf_met0 = np.var(f_met0)
+#               out_stat[1] = max(np.log(np.sqrt(vmaj) / (max(np.sqrt(vf_met0), 10.0))), 1.0)
 
             f_met = list(np.zeros(len(fore_met_min)))
             f_met[:] = [np.sqrt((i ** 2) + (j ** 2)) for i, j in zip(fore_met_maj, fore_met_min)]
@@ -155,8 +163,8 @@ class ComputeForecastMetrics:
                           'dims': {'num_ens': self.nens},
                           'data_vars': {'fore_met_init': {'dims': ('num_ens',),
                                                       'attrs': {'units': 'km',
-                                                                'description': 'distance from ensemble-mean position'},
-                                                      'data': f_met}}}
+                                                             'description': 'distance from ensemble-mean position'},
+                                                   'data': f_met}}}
 
             #  Write track-related metrics to netcdf files for future use.
             xr.Dataset.from_dict(self.forecast_maj_track).to_netcdf(
@@ -178,6 +186,14 @@ class ComputeForecastMetrics:
 
         #  Compute integrated intensity EOF metric
         self.__intensity_eof()
+
+        #  Compute precipitation EOF metric
+        if self.config['metric'].get('wind_speed_eof_metric', 'False') == 'True':
+           self.__wind_speed_eof()
+
+        #  Compute mean precipitation metric
+        if self.config['metric'].get('precipitation_metric', 'False') == 'True':
+           self.__precipitation_mean()
 
         #  Compute precipitation EOF metric
         if self.config['metric'].get('precipitation_eof_metric', 'False') == 'True':
@@ -545,7 +561,7 @@ class ComputeForecastMetrics:
 
         logging.warning('  Computing time-integrated track metric')
 
-        halfens = int(0.5*float(self.nens))
+        ens_min = int(float(self.config['metric'].get('track_eof_member_frac', 0.5))*float(self.nens))
 
         ellfreq = 24.0
 
@@ -575,8 +591,8 @@ class ComputeForecastMetrics:
                 m_lat_t = m_lat_t + lat[n]
                 m_lon_t = m_lon_t + lon[n]
 
-           #  Only consider this time if at least half of members are present
-           if e_cnt >= halfens:
+           #  Only consider this time if a critical number of members are present
+           if e_cnt >= ens_min:
 
               m_lon_t = m_lon_t / e_cnt
               m_lat_t = m_lat_t / e_cnt
@@ -593,7 +609,7 @@ class ComputeForecastMetrics:
                     ensvec[n,p2] = 0.0
 
         #  Compute EOF/PCs of the track perturbations
-        solver = Eof(ensvec)
+        solver = Eof(ensvec[:,0:(p2+1)])
         pc1    = np.squeeze(solver.pcs(npcs=1, pcscaling=1))
 
         pc1[:] = pc1[:] / np.std(pc1)
@@ -622,16 +638,19 @@ class ComputeForecastMetrics:
                 m_lat[t] = m_lat[t] + ens_lat[n,t]
                 m_lon[t] = m_lon[t] + ens_lon[n,t]
 
-           m_lon[t] = m_lon[t] / e_cnt
-           m_lat[t] = m_lat[t] / e_cnt
+           if e_cnt > 2:
 
-           for n in range(self.nens):
-              if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
-                 dy[t] = dy[t] + np.radians(ens_lat[n,t]-m_lat[t])*self.earth_radius * pc1[n]
-                 dx[t] = dx[t] + np.radians(ens_lon[n,t]-m_lon[t])*self.earth_radius*np.cos(np.radians(m_lat[t])) * pc1[n]
- 
-           dy[t] = dy[t] / e_cnt
-           dx[t] = dx[t] / e_cnt
+              m_lon[t] = m_lon[t] / e_cnt
+              m_lat[t] = m_lat[t] / e_cnt
+
+              for n in range(self.nens):
+                 if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
+                    dy[t] = dy[t] + np.radians(ens_lat[n,t]-m_lat[t])*self.earth_radius * pc1[n]
+                    dx[t] = dx[t] + np.radians(ens_lon[n,t]-m_lon[t])*self.earth_radius*np.cos(np.radians(m_lat[t])) * pc1[n]
+
+              dy[t] = dy[t] / e_cnt
+              dx[t] = dx[t] / e_cnt
+
 
         imsum = 0.
         jmsum = 0.
@@ -641,42 +660,46 @@ class ComputeForecastMetrics:
         #  Determine the extent to which the PC is aligned with the along/right of track direction
         for t in range(ntimes):
 
-           t1 = max((t-1,0))
-           t2 = min((t+1,ntimes-1))
+           fhr = f1+t*6
 
-           aloi = np.radians(m_lon[t2]-m_lon[t1])*self.earth_radius*np.cos(np.radians(0.5*(m_lat[t1]+m_lat[t2])))
-           aloj = np.radians(m_lat[t2]-m_lat[t1])*self.earth_radius
+           if fhr >= fhr1 and fhr <= fhr2:
 
-           veclen = np.sqrt(aloi*aloi + aloj*aloj)
-           aloi   = aloi / veclen
-           aloj   = aloj / veclen
-           acri   = aloj
-           acrj   = -aloi
+             t1 = max((t-1,0))
+             t2 = min((t+1,ntimes-1))
 
-           veclen = np.sqrt(dx[t]**2 + dy[t]**2)
-           peri   = dx[t] / veclen
-           perj   = dy[t] / veclen
+             aloi = np.radians(m_lon[t2]-m_lon[t1])*self.earth_radius*np.cos(np.radians(0.5*(m_lat[t1]+m_lat[t2])))
+             aloj = np.radians(m_lat[t2]-m_lat[t1])*self.earth_radius
 
-           adist  = aloi*peri + aloj*perj
-           xdist  = acri*peri + acrj*perj
+             veclen = np.sqrt(aloi*aloi + aloj*aloj)
+             aloi   = aloi / veclen
+             aloj   = aloj / veclen
+             acri   = aloj
+             acrj   = -aloi
 
-           alsum = alsum + adist
-           axsum = axsum + xdist
+             veclen = np.sqrt(dx[t]**2 + dy[t]**2)
+             peri   = dx[t] / np.max([veclen,0.000001])
+             perj   = dy[t] / np.max([veclen,0.000001])
 
-           if abs(adist) > abs(xdist):
-             if adist < 0:
-               imsum = imsum - peri
-               jmsum = jmsum - perj
+             adist  = aloi*peri + aloj*perj
+             xdist  = acri*peri + acrj*perj
+
+             alsum = alsum + adist
+             axsum = axsum + xdist
+
+             if abs(adist) > abs(xdist):
+               if adist < 0:
+                 imsum = imsum - peri
+                 jmsum = jmsum - perj
+               else:
+                 imsum = imsum + peri
+                 jmsum = jmsum + perj
              else:
-               imsum = imsum + peri
-               jmsum = jmsum + perj
-           else:
-             if xdist < 0:
-               imsum = imsum - peri
-               jmsum = jmsum - perj
-             else:
-               imsum = imsum + peri
-               jmsum = jmsum + perj
+               if xdist < 0:
+                 imsum = imsum - peri
+                 jmsum = jmsum - perj
+               else:
+                 imsum = imsum + peri
+                 jmsum = jmsum + perj
 
         #  Flip the sign of the EOF, so positive values are along and to right of track
         veclen = np.sqrt(imsum*imsum + jmsum*jmsum)
@@ -706,23 +729,10 @@ class ComputeForecastMetrics:
         ell_freq = self.config['vitals_plot'].get('ellipse_frequency', 24)
         ellcol = ["#551A8B", "#00FFFF", "#00EE00", "#FF0000", "#FF00FF", "#551A8B", "#00FFFF", "#00EE00", "#FF0000"]
 
-        #  Create basic figure plotting options
-        fig = plt.figure(figsize=(11,8.5))
-
-        ax = plt.axes(projection=ccrs.PlateCarree())
-        states = NaturalEarthFeature(category="cultural", scale="50m",
-                                     facecolor="none",
-                                     name="admin_1_states_provinces_shp")
-        ax.add_feature(states, linewidth=0.5, edgecolor="black")
-        ax.coastlines('50m', linewidth=1.0)
-        ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
-        ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
-
         minLat =  90.
         maxLat = -90.
         minLon = 360.
         maxLon = -180.
-        gridInt = 5.
 
         #  Determine range of figure
         for n in range(self.nens):
@@ -738,22 +748,17 @@ class ComputeForecastMetrics:
         minLon = minLon - 2.5
         maxLon = maxLon + 2.5
 
-        #  Add gridlines
-        gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
-                      linewidth=1, color='gray', alpha=0.5, linestyle='-')
-        gl.top_labels = None
-        gl.right_labels = None
-        gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLon),10.*np.ceil(0.1*maxLon)+1.,gridInt))
-        gl.xformatter = LONGITUDE_FORMATTER
-        gl.xlabel_style = {'size': 12, 'color': 'gray'}
-        gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLat),10.*np.ceil(0.1*maxLat)+1.,gridInt))
-        gl.yformatter = LATITUDE_FORMATTER
-        gl.ylabel_style = {'size': 12, 'color': 'gray'}
+        trackDict = {}
+        trackDict['grid_interval'] = self.config['vitals_plot'].get('grid_interval', 5)
+        trackDict['left_labels'] = 'True'
+        trackDict['right_labels'] = 'None'
 
-        ax.set_extent([minLon, maxLon, minLat, maxLat], ccrs.PlateCarree())
+        #  Create basic figure plotting options
+        fig = plt.figure(figsize=(11,8.5))
+        ax = background_map(self.config['vitals_plot'].get('projection', 'PlateCarree'), minLon, maxLon, minLat, maxLat, trackDict)
 
-        x_ell = np.zeros(360)
-        y_ell = np.zeros(360)
+        x_ell = np.zeros(361)
+        y_ell = np.zeros(361)
         pb    = np.zeros((2, 2))
 
         #  Plot the individual ensemble members
@@ -764,11 +769,11 @@ class ComputeForecastMetrics:
             if ens_lat[n,t] != self.atcf.missing and ens_lon[n,t] != self.atcf.missing:
               y.append(ens_lat[n,t])
               x.append(ens_lon[n,t])
-          ax.plot(x, y, color='lightgray', zorder=1, transform=ccrs.Geodetic())
+          ax.plot(x, y, color='lightgray', zorder=1, transform=ccrs.PlateCarree())
 
         #  Plot the ensemble mean and track perturbation
-        ax.plot(m_lon, m_lat, color='black', linewidth=3, zorder=15, transform=ccrs.Geodetic())        
-        ax.plot(p_lon, p_lat, '--', color='black', linewidth=3, zorder=15, transform=ccrs.Geodetic())
+        ax.plot(m_lon, m_lat, color='black', linewidth=3, zorder=15, transform=ccrs.PlateCarree())        
+        ax.plot(p_lon, p_lat, '--', color='black', linewidth=3, zorder=15, transform=ccrs.PlateCarree())
 
         #  Plot the ellipses and points 
         color_index = 0
@@ -794,9 +799,11 @@ class ComputeForecastMetrics:
 
             pb[:,:] = 0.0
             for n in range(len(x_ens)):
-              pb[0,0] = pb[0,0] + (x_ens[n]-m_lon[t])**2
-              pb[1,1] = pb[1,1] + (y_ens[n]-m_lat[t])**2
-              pb[1,0] = pb[1,0] + (x_ens[n]-m_lon[t])*(y_ens[n]-m_lat[t])
+              fx      = np.radians(x_ens[n]-m_lon[t]) * self.earth_radius * np.cos(np.radians(0.5*(y_ens[n] + m_lat[t])))
+              fy      = np.radians(y_ens[n]-m_lat[t]) * self.earth_radius
+              pb[0,0] = pb[0,0] + fx**2
+              pb[1,1] = pb[1,1] + fy**2
+              pb[1,0] = pb[1,0] + fx*fy
 
             pb[0,1] = pb[1,0]
             pb[:,:] = pb[:,:] / float(e_cnt-1)
@@ -804,30 +811,39 @@ class ComputeForecastMetrics:
             sigma_x = np.sqrt(pb[0,0])
             sigma_y = np.sqrt(pb[1,1])
             fac = 1. / (2. * (1. - rho * rho))
-            
+
             rdex = 0
-            for rad in range(int(np.degrees(2*np.pi))):
+            for rad in range(int(np.degrees(2*np.pi))+1):
               x_start = np.cos(np.radians(rad))
               y_start = np.sin(np.radians(rad))
-              for r_distance in range(2400):
-                x_loc = x_start * r_distance / 80.0
-                y_loc = y_start * r_distance / 80.0
+              for r_distance in range(4000):
+                x_loc = x_start * r_distance
+                y_loc = y_start * r_distance
                 prob = np.exp(-1.0 * fac * ((x_loc / sigma_x) ** 2 + (y_loc / sigma_y) ** 2 -
                                   2.0 * rho * (x_loc / sigma_x) * (y_loc / sigma_y)))
                 if prob < 0.256:
-                  x_ell[rdex] = x_loc + m_lon[t]
-                  y_ell[rdex] = y_loc + m_lat[t]
+                  x_ell[rdex] = m_lon[t] + x_loc / (self.deg2rad*self.earth_radius*np.cos(np.radians(m_lat[t]))) 
+                  y_ell[rdex] = m_lat[t] + y_loc / (self.deg2rad*self.earth_radius)
                   rdex = rdex + 1
                   break
 
-            ax.plot(x_ell, y_ell, color=ellcol[color_index], zorder=20, transform=ccrs.Geodetic())
+            ax.plot(x_ell, y_ell, color=ellcol[color_index], zorder=20, transform=ccrs.PlateCarree())
 
             color_index += 1            
 
-        plt.title("{0} ECMWF forecast of {1}".format(self.datea_str, self.config['storm']))
+        fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
+        plt.title("{0} {1} forecast of {2}, {3} of variance".format(self.datea_str, \
+                           self.config.get('model_src',''), self.storm, fracvar))
 
-        plt.savefig("TC_position_eof.png",format='png',dpi=150,bbox_inches='tight')
-        plt.close()
+        outdir = '{0}/f{1}_intmajtrack'.format(self.config['figure_dir'],'%0.3i' % fhr2)
+        if not os.path.isdir(outdir):
+           try:
+              os.makedirs(outdir)
+           except OSError as e:
+              raise e
+
+        plt.savefig('{0}/metric.png'.format(outdir), format='png', dpi=150, bbox_inches='tight')
+        plt.close(fig)
 
         #  Create xarray object of forecast metric, write to file.
         f_met_trackeof_nc = {'coords': {},
@@ -843,7 +859,7 @@ class ComputeForecastMetrics:
                                                             'data': np.squeeze(pc1)}}}
 
         xr.Dataset.from_dict(f_met_trackeof_nc).to_netcdf(
-            self.outdir + "/{1}_f{0}_intmajtrack.nc".format(self.config['metric'].get('track_eof_hour_final',120), str(self.datea_str)), encoding={'fore_met_init': {'dtype': 'float32'}})
+            self.outdir + "/{0}_f{1}_intmajtrack.nc".format(str(self.datea_str), '%0.3i' % fhr2), encoding={'fore_met_init': {'dtype': 'float32'}})
 
 
     def __intensity_eof(self):
@@ -856,13 +872,13 @@ class ComputeForecastMetrics:
 
         logging.warning('  Computing time-integrated intensity metric')
 
-        halfens = int(0.5*float(self.nens))
+        ens_min = int(float(self.config['metric'].get('intensity_eof_member_frac', 0.5))*float(self.nens))
 
         esign=1.0
 
-        fhr1 = self.config['metric'].get('intensity_eof_hour_init', 24)
-        fint = self.config['metric'].get('intensity_eof_hour_int', 6)
-        fhr2 = self.config['metric'].get('intensity_eof_hour_final', 96)
+        fhr1 = int(self.config['metric'].get('intensity_eof_hour_init', 24))
+        fint = int(self.config['metric'].get('intensity_eof_hour_int', 6))
+        fhr2 = int(self.config['metric'].get('intensity_eof_hour_final', 96))
 
         ntimes = int((fhr2-fhr1) / fint) + 1
 
@@ -883,7 +899,7 @@ class ComputeForecastMetrics:
                 m_slp_t = m_slp_t + slp[n]
 
            #   Only consider times where at least half of members have storm for EOF
-           if e_cnt >= halfens:
+           if e_cnt >= ens_min:
 
               m_slp_t = m_slp_t / e_cnt
               tt      = tt + 1
@@ -977,7 +993,9 @@ class ComputeForecastMetrics:
 
         ax0.set_xlabel("Forecast Hour")
         ax0.set_ylabel("Minimum Pressure (hPa)")
-        plt.title("{0} ECMWF forecast of {1}".format(self.datea_str, self.config['storm']))
+        fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
+        plt.title("{0} {1} forecast of {2}, {3} of variance".format(self.datea_str, \
+                     self.config.get('model_src',''), self.config['storm'], fracvar))
         plt.xticks(range(0,240,24))
         plt.xlim(0, 120)
 
@@ -1003,8 +1021,15 @@ class ComputeForecastMetrics:
         plt.xticks(range(0,240,24))
         plt.xlim(0, 120)
 
-        plt.savefig('TC_minslp_eof.png',format='png',dpi=150,bbox_inches='tight')
-        plt.close()
+        outdir = '{0}/f{1}_intmslp'.format(self.config['figure_dir'],'%0.3i' % fhr2)
+        if not os.path.isdir(outdir):
+           try:
+              os.makedirs(outdir)
+           except OSError as e:
+              raise e
+
+        plt.savefig('{0}/metric.png'.format(outdir), format='png', dpi=150, bbox_inches='tight')
+        plt.close(fig)
 
         f_met_inteneof_nc = {'coords': {},
                              'attrs': {'FORECAST_METRIC_LEVEL': '',
@@ -1017,10 +1042,10 @@ class ComputeForecastMetrics:
                                                             'data': pc1}}}
 
         xr.Dataset.from_dict(f_met_inteneof_nc).to_netcdf(
-            self.outdir + "/{1}_f{0}_intmslp.nc".format(self.config['metric'].get('intensity_eof_hour_final',120), str(self.datea_str)), encoding={'fore_met_init': {'dtype': 'float32'}})
+            self.outdir + "/{0}_f{1}_intmslp.nc".format(str(self.datea_str), '%0.3i' % fhr2), encoding={'fore_met_init': {'dtype': 'float32'}})
 
 
-    def __precipitation_eof(self):
+    def __precipitation_mean(self):
         '''
         Function that computes precipitation EOF metric, which is calculated by taking the EOF of 
         the ensemble precipitation forecast over a domain defined by the user in a text file.  
@@ -1028,6 +1053,8 @@ class ComputeForecastMetrics:
         EOF.  The function also plots a figure showing the ensemble-mean precipitation pattern 
         along with the precipitation perturbation that is consistent with the first EOF. 
         '''
+
+        search_max = 150.
 
         infile = self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm)
         try:
@@ -1043,28 +1070,242 @@ class ComputeForecastMetrics:
         lon1 = float(f.readline())
         lat2 = float(f.readline())
         lon2 = float(f.readline())
+        try:
+           latc = float(f.readline())
+           lonc = float(f.readline())
+           maxf = float(f.readline())
+        except IOError:
+           logging.warning('Mean metric location does not exist.  Cannot compute mean precipitation metric')
+           return None
 
         f.close()
 
+        fff1 = '%0.3i' % fhr1
+        fff2 = '%0.3i' % fhr2
+        datea_1   = self.datea + dt.timedelta(hours=fhr1)
+        date1_str = datea_1.strftime("%Y%m%d%H")
+        datea_2   = self.datea + dt.timedelta(hours=fhr2)
+        date2_str = datea_2.strftime("%Y%m%d%H")
+
         #  Read the total precipitation for the beginning of the window
-        g1 = self.dpp.ReadGribFiles(self.datea_str, fhr1, self.config)
+        g1 = self.dpp.ReadGribFiles(self.datea_str, fhr2, self.config)
 
         vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2),
                  'description': 'precipitation', 'units': 'mm', '_FillValue': -9999.}
         vDict = g1.set_var_bounds('precipitation', vDict)
-        ensmati = g1.create_ens_array('precipitation', self.nens, vDict)
-
-        for n in range(self.nens):
-           ensmati[n,:,:] = np.squeeze(g1.read_grib_field('precipitation', n, vDict))
-
-        #  Read the precipitation for the end of the window
-        g1 = self.dpp.ReadGribFiles(self.datea_str, fhr2, self.config)
 
         ensmat = g1.create_ens_array('precipitation', self.nens, vDict)
 
         for n in range(self.nens):
            eout = g1.read_grib_field('precipitation', n, vDict).squeeze()
            ensmat[n,:,:] = eout[:,:]
+
+        g1 = self.dpp.ReadGribFiles(self.datea_str, fhr1, self.config)
+        if fhr1 > 0.:
+           ensmati = g1.create_ens_array('precipitation', self.nens, vDict)
+           for n in range(self.nens):
+              ensmati[n,:,:] = np.squeeze(g1.read_grib_field('precipitation', n, vDict))
+        else:
+           ensmati = np.zeros(ensmat.shape)
+           ensmati[:,:,:] = 0.
+
+        if eout.units == "m":
+           vscale = 1000.
+        else:
+           vscale = 1.
+
+        #  Scale all of the rainfall to mm and to a 24 h precipitation
+        ensmat[:,:,:] = (ensmat[:,:,:] - ensmati[:,:,:]) * vscale * 24. / float(fhr2-fhr1)
+
+        lonarr, latarr = np.meshgrid(eout.longitude.values, eout.latitude.values)
+        cdist = great_circle(lonc, latc, lonarr, latarr)
+        nlon  = len(eout.longitude.values)
+        nlat  = len(eout.latitude.values)
+
+        e_mean = np.mean(ensmat, axis=0)
+        e_std  = np.std(ensmat, axis=0)
+
+        #  Blank out all locations outside of search radius
+        cdist = np.where(cdist <= search_max, 1.0, 0.0)
+        estd_mask = e_std[:,:] * cdist[:,:]
+
+        stdmax = estd_mask.max()
+        maxloc = np.where(estd_mask == stdmax)
+        icen   = int(maxloc[1])
+        jcen   = int(maxloc[0])
+
+        stdmax = stdmax * maxf
+
+        fmgrid = np.zeros(e_mean.shape)
+        fmgrid[jcen,icen] = 1.0
+
+        #  start from location of max. SD, search for contiguous points above threshold
+        for r in range(1,max(nlon,nlat)):
+
+           i1 = max(icen-r,0)
+           i2 = min(icen+r,nlon-1)
+           j1 = max(jcen-r,0)
+           j2 = min(jcen+r,nlat-1)
+
+           nring = 0
+           for i in range(i1+1, i2):
+              if ( e_std[j1,i] >= stdmax and fmgrid[j1+1,i] == 1. ):
+                 nring = nring + 1
+                 fmgrid[j1,i] = 1.
+              if ( e_std[j2,i] >= stdmax and fmgrid[j2-1,i] == 1. ):
+                 nring = nring + 1
+                 fmgrid[j2,i] = 1.
+
+           for j in range(j1+1, j2):
+              if ( e_std[j,i1] >= stdmax and fmgrid[j,i1+1] == 1. ):
+                 nring = nring + 1
+                 fmgrid[j,i1] = 1.
+              if ( e_std[j,i2] >= stdmax and fmgrid[j,i2-1] == 1. ):
+                 nring = nring + 1
+                 fmgrid[j,i2] = 1.
+
+           if ( e_std[j1,i1] >= stdmax and (fmgrid[j1,i1+1] == 1. or fmgrid[j1+1,i1] == 1.)):
+              nring = nring + 1
+              fmgrid[j1,i1] = 1.
+
+           if ( e_std[j1,i2] >= stdmax and (fmgrid[j1,i2-1] == 1. or fmgrid[j1+1,i2] == 1.)):
+              nring = nring + 1
+              fmgrid[j1,i2] = 1.
+
+           if ( e_std[j2,i1] >= stdmax and (fmgrid[j2,i1+1] == 1. or fmgrid[j2-1,i1] == 1.)):
+              nring = nring + 1
+              fmgrid[j2,i1] = 1.
+
+           if ( e_std[j2,i2] >= stdmax and (fmgrid[j2,i2-1] == 1. or fmgrid[j2-1,i2] == 1.)):
+              nring = nring + 1
+              fmgrid[j2,i2] = 1.
+
+        fmout = np.zeros(g1.nens)
+        npts  = np.sum(fmgrid)
+
+        #  Average precipitation
+        for n in range(g1.nens):
+
+           fmout[n] = np.sum(fmgrid[:,:]*ensmat[n,:,:]) / npts
+
+        #  Create basic figure, including political boundaries and grid lines
+        fig = plt.figure(figsize=(11,6.5), constrained_layout=True)
+
+        colorlist = ("#FFFFFF", "#00ECEC", "#01A0F6", "#0000F6", "#00FF00", "#00C800", "#009000", "#FFFF00", \
+                     "#E7C000", "#FF9000", "#FF0000", "#D60000", "#C00000", "#FF00FF", "#9955C9")
+
+        plotBase = {}
+        plotBase['subplot']       = 'True'
+        plotBase['subrows']       = 1
+        plotBase['subcols']       = 2
+        plotBase['subnumber']     = 1
+        plotBase['grid_interval'] = config['metric'].get('grid_interval', 5)
+        plotBase['left_labels'] = 'True'
+        plotBase['right_labels'] = 'None'
+        ax1 = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, plotBase)
+
+        #  Plot the ensemble-mean precipitation on the left panel
+        mpcp = [0.0, 0.25, 0.50, 1., 1.5, 2., 4., 6., 8., 12., 16., 24., 32., 64., 96., 97.]
+        norm = matplotlib.colors.BoundaryNorm(mpcp,len(mpcp))
+        pltf1 = plt.contourf(ensmat.longitude.values,ensmat.latitude.values,e_mean,mpcp, \
+                              cmap=matplotlib.colors.ListedColormap(colorlist), norm=norm, extend='max')
+
+        cbar = plt.colorbar(pltf1, fraction=0.15, aspect=45., pad=0.04, orientation='horizontal', ticks=mpcp)
+        cbar.set_ticks(mpcp[1:(len(mpcp)-1):2])
+
+        plt.title('Mean')
+
+        plotBase['subnumber']     = 2
+        plotBase['left_labels'] = 'None'
+        plotBase['right_labels'] = 'None'
+        ax2 = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, plotBase)
+
+        #  Plot the ensemble standard deviation precipitation on the right panel
+        spcp = [0., 3., 6., 9., 12., 15., 18., 21., 24., 27., 30., 33., 36., 39., 42., 43.]
+        norm = matplotlib.colors.BoundaryNorm(spcp,len(spcp))
+        pltf2 = plt.contourf(ensmat.longitude.values,ensmat.latitude.values,e_std,spcp, \
+                              cmap=matplotlib.colors.ListedColormap(colorlist), norm=norm, extend='max')
+
+        pltm = plt.contour(ensmat.longitude.values,ensmat.latitude.values,fmgrid,[0.49, 0.51],linewidths=2.5, colors='w')
+
+        cbar = plt.colorbar(pltf2, fraction=0.15, aspect=45., pad=0.04, orientation='horizontal', ticks=spcp)
+        cbar.set_ticks(spcp[1:(len(spcp)-1)])
+
+        plt.title('Standard Deviation')
+
+        fig.suptitle('F{0}-F{1} Precipitation ({2}-{3})'.format(fff1, fff2, date1_str, date2_str), fontsize=16)
+
+        outdir = '{0}/f{1}_precip'.format(self.config['figure_dir'],'%0.3i' % fhr2)
+        if not os.path.isdir(outdir):
+           try:
+              os.makedirs(outdir)
+           except OSError as e:
+              raise e
+
+        plt.savefig('{0}/metric.png'.format(outdir), format='png', dpi=120, bbox_inches='tight')
+        plt.close(fig)
+
+        f_metric = {'coords': {},
+                    'attrs': {'FORECAST_METRIC_LEVEL': '',
+                              'FORECAST_METRIC_NAME': 'mean precipitation',
+                              'FORECAST_METRIC_SHORT_NAME': 'pcp'},
+                    'dims': {'num_ens': g1.nens},
+                             'data_vars': {'fore_met_init': {'dims': ('num_ens',),
+                                                             'attrs': {'units': 'mm',
+                                                                       'description': 'precipitation'},
+                                                             'data': fmout}}}
+
+        xr.Dataset.from_dict(f_metric).to_netcdf(
+            "{0}/{1}_f{2}_precip.nc".format(self.outdir,str(self.datea_str),'%0.3i' % fhr2), encoding={'fore_met_init': {'dtype': 'float32'}})
+
+
+    def __precipitation_eof(self):
+        '''
+        Function that computes precipitation EOF metric, which is calculated by taking the EOF of 
+        the ensemble precipitation forecast over a domain defined by the user in a text file.  
+        The resulting forecast metric is the principal component of the
+        EOF.  The function also plots a figure showing the ensemble-mean precipitation pattern 
+        along with the precipitation perturbation that is consistent with the first EOF. 
+        '''
+
+        infile = self.config['metric'].get('precip_metric_file').format(self.datea_str,self.storm)
+
+        try:
+           conf = configparser.ConfigParser()
+           conf.read(infile)
+           fhr1 = int(conf['definition'].get('forecast_hour1'))
+           fhr2 = int(conf['definition'].get('forecast_hour2'))
+           lat1 = float(conf['definition'].get('latitude_min'))
+           lat2 = float(conf['definition'].get('latitude_max'))
+           lon1 = float(conf['definition'].get('longitude_min'))
+           lon2 = float(conf['definition'].get('longitude_max'))
+           metname = conf['definition'].get('metric_name','pcpeof')
+           eofn = int(conf['definition'].get('eof_number',1))
+        except:
+           logging.warning('{0} does not exist.  Cannot compute precip EOF'.format(infile))
+           return None
+
+        #  Read the total precipitation for the beginning of the window
+        g1 = self.dpp.ReadGribFiles(self.datea_str, fhr2, self.config)
+
+        vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2),
+                 'description': 'precipitation', 'units': 'mm', '_FillValue': -9999.}
+        vDict = g1.set_var_bounds('precipitation', vDict)
+
+        ensmat = g1.create_ens_array('precipitation', self.nens, vDict)
+
+        for n in range(self.nens):
+           eout = g1.read_grib_field('precipitation', n, vDict).squeeze()
+           ensmat[n,:,:] = eout[:,:]
+
+        g1 = self.dpp.ReadGribFiles(self.datea_str, fhr1, self.config)
+        if fhr1 > 0.:
+           ensmati = g1.create_ens_array('precipitation', self.nens, vDict)
+           for n in range(self.nens):
+              ensmati[n,:,:] = np.squeeze(g1.read_grib_field('precipitation', n, vDict))
+        else:
+           ensmati = np.zeros(ensmat.shape)
+           ensmati[:,:,:] = 0.
 
         if eout.units == "m":
            vscale = 1000.
@@ -1082,17 +1323,21 @@ class ComputeForecastMetrics:
         wgts = np.sqrt(coslat)[..., np.newaxis]
 
         solver = Eof_xarray(ensmat.rename({'ensemble': 'time'}), weights=wgts)
-        pc1    = np.squeeze(solver.pcs(npcs=1, pcscaling=1))
-
+        pcout  = solver.pcs(npcs=eofn, pcscaling=1)
+        pc1 = np.squeeze(pcout[:,-1])
         pc1[:] = pc1[:] / np.std(pc1)
 
         #  Compute the precipitation pattern associated with a 1 PC perturbation
         dpcp = np.zeros(e_mean.shape)
 
         for n in range(self.nens):
-          dpcp[:,:] = dpcp[:,:] + ensmat[n,:,:] * pc1[n]
+           dpcp[:,:] = dpcp[:,:] + ensmat[n,:,:] * pc1[n]
 
         dpcp[:,:] = dpcp[:,:] / float(self.nens)
+  
+        if np.sum(dpcp) < 0.:
+           pc1[:]    = -pc1[:]
+           dpcp[:,:] = -dpcp[:,:]
 
         gridInt = 5
 
@@ -1102,32 +1347,12 @@ class ComputeForecastMetrics:
         colorlist = ("#FFFFFF", "#00ECEC", "#01A0F6", "#00BFFF", "#00FF00", "#00C800", "#009000", "#FFFF00", \
                      "#E7C000", "#FF9000", "#FF0000", "#D60000", "#C00000", "#FF00FF", "#9955C9")
 
-        ax = plt.axes(projection=ccrs.PlateCarree())
-        states = NaturalEarthFeature(category="cultural", scale="50m",
-                                     facecolor="none",
-                                     name="admin_1_states_provinces_shp")
-        ax.add_feature(states, linewidth=0.5, edgecolor="black")
-        ax.coastlines('50m', linewidth=1.0)
-        ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
-        ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
-
-        gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
-                          linewidth=1, color='gray', alpha=0.5, linestyle='-')
-        gl.top_labels = None
-        gl.left_labels = None
-        gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lon1),10.*np.ceil(0.1*lon2)+1.,gridInt))
-        gl.xformatter = LONGITUDE_FORMATTER
-        gl.xlabel_style = {'size': 12, 'color': 'gray'}
-        gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*lat1),10.*np.ceil(0.1*lat2)+1.,gridInt))
-        gl.yformatter = LATITUDE_FORMATTER
-        gl.ylabel_style = {'size': 12, 'color': 'gray'}
-
-        ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
+        ax = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, self.config['metric'])
 
         mpcp = [0.0, 0.25, 0.50, 1., 1.5, 2., 4., 6., 8., 12., 16., 24., 32., 64., 96., 97.]
         norm = matplotlib.colors.BoundaryNorm(mpcp,len(mpcp))
         pltf = plt.contourf(ensmat.longitude.values,ensmat.latitude.values,e_mean,mpcp, \
-                             cmap=matplotlib.colors.ListedColormap(colorlist), norm=norm, extend='max')
+                             cmap=matplotlib.colors.ListedColormap(colorlist), norm=norm, alpha=0.5, antialiased=True, extend='max')
         
         pcpfac = np.ceil(np.max(dpcp) / 5.0)
         cntrs = np.array([-5., -4., -3., -2., -1., 1., 2., 3., 4., 5]) * pcpfac
@@ -1141,7 +1366,14 @@ class ComputeForecastMetrics:
         fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
         plt.title("{0} {1}-{2} hour Precipitation, {3} of variance".format(str(self.datea_str),fhr1,fhr2,fracvar))
 
-        plt.savefig("{}/TC_precip_eof.png".format(self.config['work_dir']),format='png',dpi=120,bbox_inches='tight')
+        outdir = '{0}/f{1}_{2}'.format(self.config['figure_dir'],'%0.3i' % fhr2,metname)
+        if not os.path.isdir(outdir):
+           try:
+              os.makedirs(outdir)
+           except OSError as e:
+              raise e
+
+        plt.savefig('{0}/metric.png'.format(outdir), format='png', dpi=120, bbox_inches='tight')
         plt.close(fig)
 
         f_met_pcpeof_nc = {'coords': {},
@@ -1152,11 +1384,133 @@ class ComputeForecastMetrics:
                              'data_vars': {'fore_met_init': {'dims': ('num_ens',),
                                                             'attrs': {'units': '',
                                                                       'description': 'precipitation PC'},
-                                                            'data': pc1}}}
+                                                            'data': pc1.data}}}
 
         xr.Dataset.from_dict(f_met_pcpeof_nc).to_netcdf(
-            self.outdir + "/{1}_f{0}_intmslp.nc".format(fhr2, str(self.datea_str)), encoding={'fore_met_init': {'dtype': 'float32'}})
+            "{0}/{1}_f{2}_{3}.nc".format(self.outdir,str(self.datea_str),'%0.3i' % fhr2,metname), encoding={'fore_met_init': {'dtype': 'float32'}})
 
+
+    def __wind_speed_eof(self):
+        '''
+        Function that computes wind speed EOF metric, which is calculated by taking the EOF of 
+        the ensemble maximum wind speed forecast over a domain defined by the user in a text file.  
+        The resulting forecast metric is the principal component of the
+        EOF.  The function also plots a figure showing the ensemble-mean max. wind speed pattern 
+        along with the wind speed perturbation that is consistent with the first EOF. 
+        '''
+
+        infile = self.config['metric'].get('wind_metric_file').format(self.datea_str,self.storm)
+
+        try:
+           conf = configparser.ConfigParser()
+           conf.read(infile)
+           fhr1 = int(conf['definition'].get('forecast_hour1'))
+           fhr2 = int(conf['definition'].get('forecast_hour2'))
+           lat1 = float(conf['definition'].get('latitude_min'))
+           lat2 = float(conf['definition'].get('latitude_max'))
+           lon1 = float(conf['definition'].get('longitude_min'))
+           lon2 = float(conf['definition'].get('longitude_max'))
+           metname = conf['definition'].get('metric_name','wndeof')
+           eofn = int(conf['definition'].get('eof_number',1))
+        except:
+           logging.warning('{0} does not exist.  Cannot compute wind EOF'.format(infile))
+           return None
+
+        #  Read the total precipitation for the beginning of the window
+        g1 = self.dpp.ReadGribFiles(self.datea_str, fhr1, self.config)
+
+        vDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2),
+                 'description': 'wind speed', 'units': 'm/s', '_FillValue': -9999.}
+        vDict = g1.set_var_bounds('zonal_wind_10m', vDict)
+
+        ensmat = g1.create_ens_array('zonal_wind_10m', self.nens, vDict)
+
+        for fhr in range(fhr1, fhr2+int(self.config['fcst_hour_int']), int(self.config['fcst_hour_int'])):
+
+           g1 = self.dpp.ReadGribFiles(self.datea_str, fhr, self.config)
+
+           for n in range(self.nens):
+              uwnd = g1.read_grib_field('zonal_wind_10m', n, vDict).squeeze()
+              vwnd = g1.read_grib_field('meridional_wind_10m', n, vDict).squeeze()
+              ensmat[n,:,:] = np.maximum(ensmat[n,:,:],np.sqrt(uwnd[:,:]**2 + vwnd[:,:]**2))
+
+        e_mean = np.mean(ensmat, axis=0)
+        ensmat = ensmat - e_mean
+
+        #  Compute the EOF of the precipitation pattern and then the PCs
+        coslat = np.cos(np.deg2rad(ensmat.latitude.values)).clip(0., 1.)
+        wgts = np.sqrt(coslat)[..., np.newaxis]
+
+        solver = Eof_xarray(ensmat.rename({'ensemble': 'time'}), weights=wgts)
+        pcout  = solver.pcs(npcs=neof, pcscaling=1)
+        pc1 = np.squeeze(pcout[:,-1])
+        pc1[:] = pc1[:] / np.std(pc1)
+
+        #  Compute the precipitation pattern associated with a 1 PC perturbation
+        dwnd = np.zeros(e_mean.shape)
+
+        for n in range(self.nens):
+           dwnd[:,:] = dwnd[:,:] + ensmat[n,:,:] * pc1[n]
+
+#        dwnd[:,:] = (dwnd[:,:] / float(self.nens) * units('m/s')) * to('knots')
+#        e_mean = (e_mean * units('m/s')) * to('knots') 
+        dwnd[:,:] = dwnd[:,:] / float(self.nens) * 1.94
+#        e_mean = (e_mean * units('m/s')) * to('knots') 
+        e_mean[:,:] = e_mean[:,:] * 1.94
+
+        if np.sum(dwnd) < 0.:
+           pc1[:]    = -pc1[:]
+           dwnd[:,:] = -dwnd[:,:]
+
+        gridInt = 5
+
+        #  Create basic figure, including political boundaries and grid lines
+        fig = plt.figure(figsize=(11,8.5))
+
+        colorlist = ("#FFFFFF", "#00ECEC", "#01A0F6", "#00BFFF", "#00FF00", "#00C800", "#009000", "#FFFF00", \
+                     "#E7C000", "#FF9000", "#FF0000", "#D60000", "#C00000", "#FF00FF", "#9955C9")
+
+        ax = background_map(self.config['metric'].get('projection', 'PlateCarree'), lon1, lon2, lat1, lat2, self.config['metric'])
+
+        mwnd = [0.0, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 100, 110]
+        norm = matplotlib.colors.BoundaryNorm(mwnd,len(mwnd))
+        pltf = plt.contourf(ensmat.longitude.values,ensmat.latitude.values,e_mean,mwnd, \
+                             cmap=matplotlib.colors.ListedColormap(colorlist), alpha=0.5, antialiased=True, norm=norm, extend='max')
+
+        wndfac = np.ceil(np.max(dwnd) / 5.0)
+        cntrs = np.array([-5., -4., -3., -2., -1., 1., 2., 3., 4., 5]) * wndfac
+        pltm = plt.contour(ensmat.longitude.values,ensmat.latitude.values,dwnd,cntrs,linewidths=1.5, colors='k', zorder=10)
+
+        #  Add colorbar to the plot
+        cbar = plt.colorbar(pltf, fraction=0.12, aspect=45., pad=0.04, orientation='horizontal', ticks=mwnd)
+        cbar.set_ticks(mwnd[1:(len(mwnd)-1)])
+        cb = plt.clabel(pltm, inline_spacing=0.0, fontsize=12, fmt="%1.0f")
+
+        fracvar = '%4.3f' % solver.varianceFraction(neigs=1)
+        plt.title("{0} {1}-{2} hour Max. Wind Speed, {3} of variance".format(str(self.datea_str),fhr1,fhr2,fracvar))
+
+        outdir = '{0}/f{1}_{2}'.format(self.config['figure_dir'], '%0.3i' % fhr2, metname)
+        if not os.path.isdir(outdir):
+           try:
+              os.makedirs(outdir)
+           except OSError as e:
+              raise e
+
+        plt.savefig('{0}/metric.png'.format(outdir), format='png', dpi=120, bbox_inches='tight')
+        plt.close(fig)
+
+        f_met_wndeof_nc = {'coords': {},
+                           'attrs': {'FORECAST_METRIC_LEVEL': '',
+                                     'FORECAST_METRIC_NAME': 'wind speed PC',
+                                     'FORECAST_METRIC_SHORT_NAME': 'wndeof'},
+                             'dims': {'num_ens': self.nens},
+                             'data_vars': {'fore_met_init': {'dims': ('num_ens',),
+                                                            'attrs': {'units': '',
+                                                                      'description': 'wind speed PC'},
+                                                            'data': pc1.data}}}
+
+        xr.Dataset.from_dict(f_met_wndeof_nc).to_netcdf(
+            "{0}/{1}_f{2}_{3}.nc".format(self.outdir,str(self.datea_str),'%0.3i' % fhr2, metname), encoding={'fore_met_init': {'dtype': 'float32'}})
 
 
 if __name__ == "__main__":

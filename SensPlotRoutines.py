@@ -1,3 +1,5 @@
+import os
+import pandas as pd
 import matplotlib
 from IPython.core.pylabtools import figsize, getfigs
 import json
@@ -8,6 +10,8 @@ import cartopy
 import cartopy.crs as ccrs
 import numpy as np
 from matplotlib import colors
+from mpl_toolkits.axes_grid1 import make_axes_locatable
+import matplotlib.path as mpath
 from cartopy.feature import NaturalEarthFeature
 from cartopy.mpl.gridliner import LONGITUDE_FORMATTER, LATITUDE_FORMATTER
 from math import radians, degrees, sin, cos, asin, acos, sqrt
@@ -29,25 +33,39 @@ def addDrop(dropfile, plt, plotDict):
   mcolor = plotDict.get('drop_mark_color', 'black') 
   mtype  = plotDict.get('drop_mark_type', '+')
 
-  try:
-    with open(dropfile, 'r') as fdrop:
-      intext = fdrop.readlines()
+  if os.path.isfile(dropfile):
 
-      ndrops = len(intext)-14
-      droplat = np.zeros(ndrops)
-      droplon = np.zeros(ndrops)
+     droptype = plotDict.get('drop_file_type','nhc')
 
-      #  Loop over dropsonde locations, convert text to lat/lon, plot
-      for i in range(ndrops):
-        str1 = intext[13+i]
-        droplat[i] = float(str1[7:9]) + float(str1[10:12])/60.
-        droplon[i] = float(str1[16:20]) + np.sign(float(str1[16:20]))*float(str1[21:23])/60.
+     if droptype == 'nhc':
 
-      plt.plot(droplon, droplat, mtype, color=mcolor, markersize=msize)
-      fdrop.close()
+        fdrop = open(dropfile, 'r')
+        intext = fdrop.readlines()
 
-  except FileNotFoundError:
-    pass
+        ndrops = len(intext)-14
+        droplat = np.zeros(ndrops)
+        droplon = np.zeros(ndrops)
+
+        #  Loop over dropsonde locations, convert text to lat/lon, plot
+        for i in range(ndrops):
+           str1 = intext[13+i]
+           droplat[i] = float(str1[7:9]) + float(str1[10:12])/60.
+           droplon[i] = float(str1[16:20]) + np.sign(float(str1[16:20]))*float(str1[21:23])/60.
+
+        plt.plot(droplon, droplat, mtype, color=mcolor, markersize=msize, transform=ccrs.PlateCarree())
+        fdrop.close()
+
+     elif droptype == 'cw3e':
+
+        ds = pd.read_csv(filepath_or_buffer=dropfile, header=None)
+        ds.columns = ['year','month','day','hour','minute','latitude','longitude','pressure']
+        if eval(plotDict.get('flip_lon','False')):
+           ds['longitude'] = (360. - ds['longitude']) % 360.
+        else:
+           ds['longitude'] = -ds['longitude']
+        plt.plot(ds['longitude'], ds['latitude'], mtype, color=mcolor, markersize=msize, transform=ccrs.PlateCarree())
+        print(ds['longitude'])
+        del ds
 
 
 def addRangeRings(cen_lat, cen_lon, lat, lon, plt, plotDict):
@@ -109,7 +127,110 @@ def addRawin(rawinfile, plt, plotDict):
     pass
 
 
-def computeSens(ens, evar, metric):
+def set_projection(proj, lon1, lon2, DomDict):
+  '''
+  Function that creates a projection object for plotting.
+
+  Attributes:
+      proj (string):  String that contains name of projection for plot
+      lon1 (float):   minimum longitude of the plot
+      lon2 (float):   maximum longitude of the plot
+      DomDict(dict.):  Dictionary that contains plot preferences
+  '''
+
+  if proj == 'NorthPolarStereo':
+     projinfo = ccrs.NorthPolarStereo(central_longitude=0.0)
+  elif proj == 'LambertConformal':
+     projinfo = ccrs.LambertConformal(central_latitude=DomDict['central_latitude'], central_longitude=DomDict['central_longitude'], \
+                                      standard_parallels=(DomDict['standard_parallel1'], DomDict['standard_parallel2']))
+  elif (lon1 < 180. and lon2 > 180.):
+     projinfo = ccrs.PlateCarree(central_longitude=180.)
+  else:
+     projinfo = ccrs.PlateCarree()
+
+  return projinfo
+
+
+def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
+  '''
+  Function that creates a background map for plotting.
+
+  Attributes:
+      proj (string):  String that contains name of projection for plot
+      lon1 (float):   minimum longitude of the plot
+      lon2 (float):   maximum longitude of the plot
+      lat1 (float):   minimum latitude of the plot
+      lat2 (float):   maximum latitude of the plot
+      DomDict(dict.):  Dictionary that contains plot preferences
+  '''
+
+  if 'projection' in DomDict:
+     projinfo = DomDict.get('projection')
+  else:
+     projinfo = set_projection(proj, lon1, lon2, DomDict)
+
+  if eval(DomDict.get('subplot','False')):
+
+     ax = plt.subplot(DomDict['subrows'], DomDict['subcols'], \
+                       DomDict['subnumber'], projection=projinfo)
+
+  else:
+
+     ax = plt.axes(projection=projinfo)
+
+  states = NaturalEarthFeature(category="cultural", scale="50m",
+                               facecolor="none", name="admin_1_states_provinces")
+  ax.add_feature(states, linewidth=0.5, edgecolor="black")
+  ax.coastlines('50m', linewidth=1.0)
+  ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
+  ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
+
+  if proj == 'NorthPolarStereo':
+
+     ax.set_extent([lon1, lon2, lat2, lat1], ccrs.PlateCarree())
+
+     # specifying xlocs/ylocs yields number of meridian/parallel lines
+     dmeridian = float(DomDict.get('grid_lon', 30))  # spacing for lines of meridian
+     dparallel = float(DomDict.get('grid_lat', 10))  # spacing for lines of parallel 
+     num_merid = 360/dmeridian + 1
+     num_parra = 30/dparallel + 1
+     gl = ax.gridlines(crs=ccrs.PlateCarree(), xlocs=np.linspace(-180, 180, int(num_merid)),
+            ylocs=np.linspace(60, 90, int(num_parra)), linestyle="-", linewidth=1, color='gray', alpha=0.5)
+
+     theta = np.linspace(0, 2*np.pi, 120)
+     verts = np.vstack([np.sin(theta), np.cos(theta)]).T
+     center, radius = [0.5, 0.5], 0.5
+     circle = mpath.Path(verts * radius + center)
+
+     ax.set_boundary(circle, transform=ax.transAxes)  #without this; get rect bound 
+
+  else:
+
+     if lon1 > 180. or lon2 > 180.:
+       lon1 = lon1 - 360.
+       lon2 = lon2 - 360.
+
+     ax.set_extent([lon1, lon2, lat1, lat2], ccrs.PlateCarree())
+
+     gridInt = float(DomDict.get('grid_interval', 10.))
+
+     gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
+                     linewidth=1, color='gray', alpha=0.5, linestyle='-')
+     gl.top_labels = None
+     gl.bottom_labels = eval(DomDict.get('bottom_labels','True'))
+     gl.left_labels = eval(DomDict.get('left_labels','None'))
+     gl.right_labels = eval(DomDict.get('right_labels','True'))
+     gl.xlocator = mticker.FixedLocator(np.arange(-180.,180.,gridInt))
+     gl.xformatter = LONGITUDE_FORMATTER
+     gl.xlabel_style = {'size': 12, 'color': 'gray'}
+     gl.ylocator = mticker.FixedLocator(np.arange(-90.+gridInt,90.,gridInt))
+     gl.yformatter = LATITUDE_FORMATTER
+     gl.ylabel_style = {'size': 12, 'color': 'gray'}
+
+  return ax
+
+
+def computeSens(ens, emea, evar, metric):
   '''
   Function that computes the sensitivity of the forecast metric to the provided
   field using the ensemble-based sensitivity technique and the confidence bounds 
@@ -117,6 +238,7 @@ def computeSens(ens, evar, metric):
 
   Attributes:
       ens    (float):  array that contains the ensemble estimate of a field
+      emea   (float):  array that ccontains the ensemble mean of a foreast field
       evar   (float):  array that is the ensemble variance of forecast field
       metric (float):  vector of ensemble estimates of forecast metric
   '''
@@ -125,15 +247,15 @@ def computeSens(ens, evar, metric):
   sigv = np.zeros(evar.shape)
   nens = len(metric)
 
-  for i in range(len(evar[0,:])):
-    for j in range(len(evar[:,0])):
+  for n in range(nens):
+    ens[n,:,:] = ens[n,:,:] - emea[:,:]
+    sens[:,:] = sens[:,:] + ens[n,:,:]*metric[n] 
+  sens[:,:] = sens[:,:] / (float(nens-1) * evar[:,:])
 
-      #  Remove mean, compute regression, and t value
-      ens[:,j,i] = ens[:,j,i] - np.mean(ens[:,j,i],axis=0)
-      sens[j,i]  = np.sum(ens[:,j,i]*metric[:]) / (float(nens-1) * evar[j,i])
-      sy         = sum((metric[:]-sens[j,i]*ens[:,j,i])**2)
-      sy         = np.sqrt(sy / float(nens-2)) / np.sqrt(evar[j,i]*float(nens-1))
-      sigv[j,i]  = abs(sens[j,i]) / sy
+  for n in range(nens):
+    sigv[:,:] = sigv[:,:] + (metric[n]-sens[:,:]*ens[n,:,:])**2
+  sigv[:,:] = np.sqrt(sigv[:,:] / float(nens-2)) / np.sqrt(evar[:,:]*float(nens-1))
+  sigv[:,:] = abs(sens[:,:]) / sigv[:,:]
 
   return sens, sigv
 
@@ -253,6 +375,9 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
       plotDict (dict.):  Dictionary that contains configuration options
   '''
 
+#  if np.max(lon) > 180.:
+#     lon[:] = (lon[:] + 180.) % 360. - 180.
+
   minLat = float(plotDict.get('min_lat', np.amin(lat)))
   maxLat = float(plotDict.get('max_lat', np.amax(lat)))
   minLon = float(plotDict.get('min_lon', np.amin(lon)))
@@ -260,6 +385,8 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
 
   tcLat      = plotDict.get('tcLat', -9999.)
   tcLon      = plotDict.get('tcLon', -9999.)
+
+  sigval     = plotDict.get('sig_value', 2.007)
 
   gridInt    = float(plotDict.get('grid_interval', 10.))
 
@@ -270,38 +397,19 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
   #  Create basic figure, including political boundaries and grid lines
   fig = plt.figure(figsize=plotDict.get('figsize',(11,8.5)))
 
-  ax = plt.axes(projection=ccrs.PlateCarree())
-  states = NaturalEarthFeature(category="cultural", scale="50m",
-                               facecolor="none",
-                               name="admin_1_states_provinces")
-  ax.add_feature(states, linewidth=0.5, edgecolor="black")
-  ax.coastlines('50m', linewidth=1.0)
-  ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
-  ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
-
-  gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
-                    linewidth=1, color='gray', alpha=0.5, linestyle='-')
-  gl.top_labels = None
-  gl.left_labels = None
-  gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLon),10.*np.ceil(0.1*maxLon)+1.,gridInt))
-  gl.xformatter = LONGITUDE_FORMATTER
-  gl.xlabel_style = {'size': 12, 'color': 'gray'}
-  gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLat),10.*np.ceil(0.1*maxLat)+1.,gridInt))
-  gl.yformatter = LATITUDE_FORMATTER
-  gl.ylabel_style = {'size': 12, 'color': 'gray'}
-
-  ax.set_extent([minLon, maxLon, minLat, maxLat], ccrs.PlateCarree())
+  ax = background_map(plotDict.get('projection', 'PlateCarree'), minLon, maxLon, minLat, maxLat, plotDict)
 
   addRawin(plotDict.get("rawinsonde_file","null"), plt, plotDict)
 
   #  create ensemble-mean contours, sensitivity field, and stat. sig
   if plotDict.get('zero_non_sig_sens','False') == 'True':
-     sens[sigv < 2.007] = 0.
+     sens[sigv < sigval] = 0.
 
-  pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both')
-  pltm = plt.contour(lon[:],lat[:],emea,plotDict.get('meanCntrs'),linewidths=1.5, colors='k', zorder=10)
-  plts = plt.contour(lon[:],lat[:],sigv,[-2.007, 2.007], linewidths=1.0, colors='k')
-  plth = plt.contourf(lon[:],lat[:],sigv,[-2.007, 2.007],hatches=['..', None, '..'], colors='none', extend='both')
+  pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both',transform=ccrs.PlateCarree())
+  pltm = plt.contour(lon[:],lat[:],emea,plotDict.get('meanCntrs'),linewidths=1.5, colors='k', zorder=10,transform=ccrs.PlateCarree())
+  plts = plt.contour(lon[:],lat[:],sigv,[-sigval, sigval], linewidths=0.5, colors='k',transform=ccrs.PlateCarree())
+  if plotDict.get('zero_non_sig_sens','False') == 'False':
+     plth = plt.contourf(lon[:],lat[:],sigv,[-sigval, sigval],hatches=['..', None, '..'], colors='none', extend='both',transform=ccrs.PlateCarree())
 
   if 'plotTitle' in plotDict:
     plt.title(plotDict['plotTitle'])
@@ -319,7 +427,7 @@ def plotScalarSens(lat, lon, sens, emea, sigv, fileout, plotDict):
   #  Add colorbar to the plot
   cbar = plt.colorbar(pltf, fraction=0.15, aspect=45., pad=0.04, orientation='horizontal')
   cbar.set_ticks(compd_range[1:11])
-  cb = plt.clabel(pltm, inline_spacing=0.0, fontsize=12, fmt="%1.0f")
+  cb = plt.clabel(pltm, inline_spacing=0.0, fontsize=12, fmt=plotDict.get('clabel_fmt', "%1.0f"))
 
   plt.savefig(fileout,format='png',dpi=120,bbox_inches='tight')
   plt.close(fig)
@@ -344,6 +452,9 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
       plotDict (dict.):  Dictionary that contains configuration options
   '''
 
+#  if np.max(lon) > 180.:
+#     lon[:] = (lon[:] + 180.) % 360. - 180.
+
   minLat = float(plotDict.get('min_lat', np.amin(lat)))
   maxLat = float(plotDict.get('max_lat', np.amax(lat)))
   minLon = float(plotDict.get('min_lon', np.amin(lon)))
@@ -352,7 +463,7 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
   tcLat      = plotDict.get('tcLat', -9999.)
   tcLon      = plotDict.get('tcLon', -9999.)
 
-  gridInt    = float(plotDict.get('grid_interval', 10.))
+  sigval     = plotDict.get('sig_value', 2.007)
   barbInt    = int(plotDict.get('barb_interval', 6))
 
   colorlist = ("#9A32CD","#00008B","#3A5FCD","#00BFFF","#B0E2FF","#FFFFFF","#FFEC8B","#FFA500","#FF4500","#B22222","#FF82AB")
@@ -362,38 +473,20 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
   #  Create basic figure, including political boundaries and grid lines
   fig = plt.figure(figsize=plotDict.get('figsize',(11,8.5)))
 
-  ax = plt.axes(projection=ccrs.PlateCarree())
-  states = NaturalEarthFeature(category="cultural", scale="50m",
-                               facecolor="none",
-                               name="admin_1_states_provinces_shp")
-  ax.add_feature(states, linewidth=0.5, edgecolor="black")
-  ax.coastlines('50m', linewidth=1.0)
-  ax.add_feature(cartopy.feature.LAKES, facecolor='None', linewidth=1.0, edgecolor='black')
-  ax.add_feature(cartopy.feature.BORDERS, facecolor='None', linewidth=1.0, edgecolor='black')
-
-  gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
-                    linewidth=1, color='gray', alpha=0.5, linestyle='-')
-  gl.top_labels = None
-  gl.left_labels = None
-  gl.xlocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLon),10.*np.ceil(0.1*maxLon)+1.,gridInt))
-  gl.xformatter = LONGITUDE_FORMATTER
-  gl.xlabel_style = {'size': 12, 'color': 'gray'}
-  gl.ylocator = mticker.FixedLocator(np.arange(10.*np.floor(0.1*minLat),10.*np.ceil(0.1*maxLat)+1.,gridInt))
-  gl.yformatter = LATITUDE_FORMATTER
-  gl.ylabel_style = {'size': 12, 'color': 'gray'}
-
-  ax.set_extent([minLon, maxLon, minLat, maxLat], ccrs.PlateCarree())
+  ax = background_map(plotDict.get('projection', 'PlateCarree'), minLon, maxLon, minLat, maxLat, plotDict)
 
   addRawin(plotDict.get("rawinsonde_file","null"), plt, plotDict)
 
   #  create ensemble-mean vectors, sensitivity field, and stat. sig
   if plotDict.get('zero_non_sig_sens','False') == 'True':
-     sens[sigv < 2.007] = 0.
+     sens[sigv < sigval] = 0.
 
-  pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both')
-  pltm = plt.barbs(lon[::barbInt], lat[::barbInt], umea[::barbInt,::barbInt]*1.94, vmea[::barbInt,::barbInt]*1.94, pivot='middle', length=6, linewidths=0.2, zorder=10)
-  plts = plt.contour(lon[:],lat[:],sigv,[-2.007, 2.007], linewidths=0.5, colors='k')
-  plth = plt.contourf(lon[:],lat[:],sigv,[-2.007, 2.007],hatches=['..', None, '..'], colors='none', extend='both')
+  pltf = plt.contourf(lon[:],lat[:],sens,compd_range,cmap=cmap,extend='both',transform=ccrs.PlateCarree())
+  pltm = plt.barbs(lon[::barbInt], lat[::barbInt], umea[::barbInt,::barbInt]*1.94, vmea[::barbInt,::barbInt]*1.94, \
+                    pivot='middle', length=6, linewidths=0.2, zorder=10, transform=ccrs.PlateCarree())
+  plts = plt.contour(lon[:],lat[:],sigv,[-sigval, sigval], linewidths=0.5, colors='k', transform=ccrs.PlateCarree())
+  if plotDict.get('zero_non_sig_sens','False') == 'False':
+     plth = plt.contourf(lon[:],lat[:],sigv,[-sigval, sigval],hatches=['..', None, '..'], colors='none', extend='both', transform=ccrs.PlateCarree())
 
   if 'plotTitle' in plotDict:
     plt.title(plotDict['plotTitle'])
@@ -409,7 +502,7 @@ def plotVecSens(lat, lon, sens, umea, vmea, sigv, fileout, plotDict):
   addDrop(plotDict.get("dropsonde_file","null"), plt, plotDict)
 
   #  Add colorbar to the plot
-  cbar = plt.colorbar(pltf, fraction=0.15, aspect=45., pad=0.04, shrink=1.0, orientation='horizontal')
+  cbar = plt.colorbar(pltf, fraction=0.10, aspect=45., pad=0.04, shrink=1.0, orientation='horizontal')
   cbar.set_ticks(compd_range[1:11])
 
   plt.savefig(fileout,format='png',dpi=120,bbox_inches='tight')

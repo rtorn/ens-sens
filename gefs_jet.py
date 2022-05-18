@@ -1,13 +1,10 @@
 import os
 import time
-import shutil
 import sys
 import cfgrib
-import datetime as dt
-import glob
 import gzip
 import urllib
-import pandas as pd
+import datetime as dt
 import numpy as np
 import xarray as xr
 
@@ -17,9 +14,9 @@ def stage_grib_files(datea, config):
     to a directory where calculations are performed.  No matter where these calculations are
     carried out, this routine must exist.
  
-    This particular instance is for ECMWF data on the machine teton at UAlbany.  In this 
-    case, the grib files are linked to files that are located in another directory on that
-    machine.
+    This particular instance is for GEFS data on the NOAA jet machine.  In this 
+    case, the individual ensemble member files are combined into one file per forecast
+    time in the work directory, which is more efficient for reading.
 
     Attributes:
         datea (string):  The initialization time of the forecast (yyyymmddhh)
@@ -29,6 +26,9 @@ def stage_grib_files(datea, config):
     freq = config.get('fcst_hour_int', 12)
     fmax = config.get('fcst_hour_max', 120)
 
+    init    = dt.datetime.strptime(datea, '%Y%m%d%H')
+    init_s  = init.strftime("%y%j%H")
+
     #  Make the work directory if it does not exist
     if not os.path.isdir(config['work_dir']):
        try:
@@ -36,23 +36,15 @@ def stage_grib_files(datea, config):
        except OSError as e:
           raise e
 
-    init   = dt.datetime.strptime(datea, '%Y%m%d%H')
-    init_s = init.strftime("%m%d%H%M")
-
-    #  Loop over all forecast times, link to the source file
     for fhr in range(0, int(fmax)+int(freq), int(freq)):
 
-       datef   = init + dt.timedelta(hours=fhr)
-       datef_s = datef.strftime("%m%d%H%M")
+       fbase = "{0}000{1}".format(init_s, '%0.3i' % fhr)
+       fout  = '{0}/f{1}.grb2'.format(config['work_dir'],'%0.3i' % fhr)
 
-       grib_file = 'E1E{0}{1}1'.format(str(init_s), str(datef_s))
-       infile    = '{0}/{1}'.format(config['model_dir'],grib_file)
-       outfile   = '{0}/{1}'.format(config['work_dir'],grib_file)
-
-       #  Only try to copy if the file is not there
-       if ( not os.path.isfile(outfile) ):
+       if not os.path.isfile(fout):
 
           #  Wait for the source file to be present 
+          infile = '{0}/gec00/{1}'.format(config['model_dir'],fbase)
           while not os.path.exists(infile):
              time.sleep(20.1)
 
@@ -60,10 +52,19 @@ def stage_grib_files(datea, config):
           while ( (time.time() - os.path.getmtime(infile)) < 60 ):
              time.sleep(10)
 
-          try:  #  Try to link from the source to the work directory
-             os.symlink(infile, outfile)
-          except Exception as err:
-             raise err
+          os.system('cat {0}/gec00/{1} {0}/gep*/{1} >& {2}'.format(config['model_dir'],fbase,fout))
+
+          for n in range(int(config['num_ens'])+1):
+
+             #  Construct the grib file dictionary for a particular forecast hour
+             if n > 0:
+                fdir = "gep{0}".format('%0.2i' % n)
+             else:
+                fdir = "gec00"
+
+             #  read a few extra fields from the alternate files
+             falt = '{0}/pgrb2b/{1}/{2}'.format(config['model_dir'],fdir,fbase)
+             os.system('wgrib2 -s {0} | grep -e \"TMP:300 mb\" -e \"TMP:400 mb\" -e \"RH:300 mb\" -e \"RH:400 mb\" | wgrib2 -fix_ncep -i -append {0} -grib {1}'.format(falt,fout))
 
 
 def stage_atcf_files(datea, bbnnyyyy, config):
@@ -75,7 +76,7 @@ def stage_atcf_files(datea, bbnnyyyy, config):
     The result is a set of ATCF files in the work directory of the format atcf_NN.dat, 
     where NN is the ensemble member number.
 
-    This particular instance is for ECMWF data on the machine teton at UAlbany.  In this 
+    This particular instance is for GEFS data on the NOAA machine jet.  In this 
     case, all ATCF data for a particular storm is in one file, so the code waits for this
     initialization time to exist, then uses sed to get the lines attributed to each 
     ensemble member and places that data in a seperate file.
@@ -86,22 +87,22 @@ def stage_atcf_files(datea, bbnnyyyy, config):
         config     (dict):  The dictionary with configuration information
     '''
 
-    src  = '{0}/a{1}.dat'.format(config['atcf_dir'],bbnnyyyy)
-    nens = int(config['num_ens'])
-
-    #  Wait for the source file to be present 
-    while not os.path.exists(src):
-       time.sleep(20.5)
+    src  = '{0}/{1}.a{2}.dat'.format(config['atcf_dir'],datea,bbnnyyyy)
 
     #  Wait for the ensemble ATCF information to be placed in the file
-    while ( len(os.popen('sed -ne /{0}/p {1} | sed -ne /EE/p'.format(datea,src)).read()) == 0 ):
+    while ( len(os.popen('sed -ne /AP/p {0}/{1}.a{2}.dat'.format(config['atcf_dir'],datea,bbnnyyyy)).read()) == 0 ):
        time.sleep(20.7)
 
     #  Wait for the file to be finished being copied
     while ( (time.time() - os.path.getmtime(src)) < 60 ):
        time.sleep(10)
 
-    for n in range(nens + 1):
+    for n in range(int(config['num_ens']) + 1):
+
+       if ( n > 0 ):
+          modid = 'AP'
+       else:
+          modid = 'AC'
 
        nn = '%0.2i' % n
        file_name = '{0}/atcf_{1}.dat'.format(config['work_dir'],nn)
@@ -110,7 +111,7 @@ def stage_atcf_files(datea, bbnnyyyy, config):
        if not os.path.isfile(file_name):
 
           fo = open(file_name,"w")
-          fo.write(os.popen('sed -ne /{0}/p {1} | sed -ne /EE{2}/p'.format(datea,src,nn)).read())
+          fo.write(os.popen('sed -ne /{0}/p {1}/{0}.a{2}.dat | sed -ne /{3}{4}/p'.format(datea,config['atcf_dir'],bbnnyyyy,modid,nn)).read())
           fo.close()
 
 
@@ -131,7 +132,7 @@ def stage_best_file(bbnnyyyy, config):
     '''
 
     try:    #  Look for the data in the real-time directory
- 
+
       filei = urllib.request.urlopen('{0}/b{1}.dat'.format(config.get('best_dir','https://ftp.nhc.noaa.gov/atcf/btk'),bbnnyyyy))
       fileo = open('{0}/b{1}.dat'.format(config['work_dir'],bbnnyyyy), 'wb')
       fileo.write(filei.read())
@@ -156,7 +157,7 @@ class ReadGribFiles:
     forecast hour.  This class is a generic class, but differs depending on the grib file format and fields.
     The init routine creates the class and constructs a field dictionary.
 
-    This particular instance is for ECMWF data on the UAlbany teton machine.  Each ECMWF file contains all
+    This particular instance is for GEFS data on the NOAA jet machine.  Each GEFS file contains all
     members for a specific forecast time.  
 
     Attributes:
@@ -168,18 +169,19 @@ class ReadGribFiles:
     def __init__(self, datea, fhr, config):
 
         init    = dt.datetime.strptime(datea, '%Y%m%d%H')
-        init_s  = init.strftime("%m%d%H%M")
-        datef   = init + dt.timedelta(hours=fhr)
-        datef_s = datef.strftime("%m%d%H%M")
+        init_s  = init.strftime("%y%j%H")
+
+        fbase = "{0}000{1}".format(init_s, '%0.3i' % fhr)
+        self.grib_dict = {}
 
         #  Construct the grib file dictionary for a particular forecast hour
-        file_name = os.path.join(config['work_dir'], "E1E{0}{1}1".format(str(init_s), str(datef_s)))
+        file_name = "{0}/f{1}.grb2".format(config['work_dir'], '%0.3i' % fhr)
         try:  
            ds = cfgrib.open_datasets(file_name)
-           self.grib_dict = {}
+
            for d in ds:
               for tt in d:
-                 if 'number' in d[tt].dims:
+                 if d[tt].attrs['GRIB_dataType'] == 'pf':
                     self.grib_dict.update({'{0}_pf'.format(tt): d[tt]})
                  else:
                     self.grib_dict.update({'{0}_cf'.format(tt): d[tt]})
@@ -188,16 +190,16 @@ class ReadGribFiles:
            raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
 
         #  This is a dictionary that maps from generic variable names to the name of variable in file
-        self.var_dict = {'zonal_wind': 'u',           \
-                         'meridional_wind': 'v',      \
-                         'zonal_wind_10m': 'u10',      \
-                         'meridional_wind_10m': 'v10', \
-                         'geopotential_height': 'gh', \
-                         'temperature': 't',          \
-                         'relative_humidity': 'r',    \
-                         'specific_humidity': 'q',    \
-                         'sea_level_pressure': 'msl', \
-                         'precipitation': 'tp'}
+        self.var_dict = {'zonal_wind': 'u',             \
+                         'meridional_wind': 'v',        \
+                         'zonal_wind_10m': 'u10',       \
+                         'meridional_wind_10m': 'v10',  \
+                         'geopotential_height': 'gh',   \
+                         'temperature': 't',            \
+                         'specific_humidity': 'q',      \
+                         'relative_humidity': 'r',      \
+                         'sea_level_pressure': 'prmsl', \
+                         'precipitation': 'tp' }
 
         for key in self.grib_dict:
            if np.max(self.grib_dict[key].coords['longitude']) > 180:
@@ -213,7 +215,7 @@ class ReadGribFiles:
         else:
            self.has_specific_humidity = False
 
-        self.nens = int(self.grib_dict['gh_pf'].attrs['GRIB_totalNumber'])
+        self.nens = int(self.grib_dict['gh_pf'].attrs['GRIB_totalNumber']) + 1
 
 
     def set_var_bounds(self, varname, vdict):
@@ -302,6 +304,7 @@ class ReadGribFiles:
        #  Create an empty xarray that can be used to copy data into
        lonvec = list(self.grib_dict[vname].sel(longitude=slice(vdict['lon_start'], vdict['lon_end'])).longitude.data)
        latvec = list(self.grib_dict[vname].sel(latitude=slice(vdict['lat_start'], vdict['lat_end'])).latitude.data)
+
        ensarr = xr.DataArray(name='ensemble_data', data=np.zeros([nens, len(latvec), len(lonvec)]),
                              dims=['ensemble', 'latitude', 'longitude'], attrs=attrlist, 
                              coords={'ensemble': [i for i in range(nens)], 'latitude': latvec, 'longitude': lonvec}) 

@@ -2,13 +2,14 @@ import os
 import time
 import gzip
 import sys
+import warnings
 import urllib
 import datetime as dt
 import numpy as np
 import xarray as xr
 
-def stage_grib_files(datea, config):
 
+def stage_grib_files(datea, config):
     '''
     This is a generic class for copying or linking grib file data from a specific location
     to a directory where calculations are performed.  No matter where these calculations are
@@ -24,10 +25,10 @@ def stage_grib_files(datea, config):
 
     #  Make the work directory if it does not exist
     if not os.path.isdir(config['work_dir']):
-       try:
-          os.makedirs(config['work_dir'])
-       except OSError as e:
-          raise e
+        try:
+            os.makedirs(config['work_dir'])
+        except OSError as e:
+            raise e
 
 
 def stage_atcf_files(datea, bbnnyyyy, config):
@@ -50,42 +51,82 @@ def stage_atcf_files(datea, bbnnyyyy, config):
         config     (dict):  The dictionary with configuration information
     '''
 
-    src  = '{0}/a{1}.dat.gz'.format(config['atcf_dir'],bbnnyyyy)
+    src = '{0}/a{1}.dat.gz'.format(config['atcf_dir'], bbnnyyyy)
     nens = int(config['num_ens'])
 
     #  Unzip the file from the NHC server, write the file to the work directory
     gzfile = gzip.GzipFile(fileobj=urllib.request.urlopen(src))
-    uzfile = open('{0}/a{1}.dat'.format(config['work_dir'],bbnnyyyy), 'wb')
-    uzfile.write(gzfile.read())        
+    uzfile = open('{0}/a{1}.dat'.format(config['work_dir'], bbnnyyyy), 'wb')
+    uzfile.write(gzfile.read())
     gzfile.close()
     uzfile.close()
 
     #  Wait for the ensemble ATCF information to be placed in the file
-#    while ( len(os.popen("sed -ne /" + self.init + "/p " + self.dest + "/a" + bbnnyyyy + ".dat | sed -ne /EE/p").read()) == 0 ):
-#       time.sleep(20.7)
+    #    while ( len(os.popen("sed -ne /" + self.init + "/p " + self.dest + "/a" + bbnnyyyy + ".dat | sed -ne /EE/p").read()) == 0 ):
+    #       time.sleep(20.7)
 
     #  Wait for the file to be finished being copied
-#    while ( (time.time() - os.path.getmtime(self.src)) < 60 ):
-#       time.sleep(10)
+    #    while ( (time.time() - os.path.getmtime(self.src)) < 60 ):
+    #       time.sleep(10)
 
     for n in range(nens + 1):
 
-       if ( n > 0 ):
-          modid = 'AP'
-       else:
-          modid = 'AC'
+        if (n > 0):
+            modid = 'AP'
+        else:
+            modid = 'AC'
 
-       nn = '%0.2i' % n
-       file_name = '{0}/atcf_{1}.dat'.format(config['work_dir'],nn)
+        nn = '%0.2i' % n
+        file_name = '{0}/atcf_{1}.dat'.format(config['work_dir'], nn)
 
-       #  If the specific member's ATCF file does not exist, copy from the source file with sed.
-       if not os.path.isfile(file_name):
+        #  If the specific member's ATCF file does not exist, copy from the source file with sed.
+        if not os.path.isfile(file_name):
 
-          fo = open(file_name,"w")
-          fo.write(os.popen('sed -ne /{0}/p {1}/a{2}.dat | sed -ne /{3}{4}/p'.format(datea,config['work_dir'],bbnnyyyy,modid,nn)).read())
-          fo.close()
+            fo = open(file_name, "w")
+            fo.write(
+                os.popen('sed -ne /{0}/p {1}/a{2}.dat | sed -ne /{3}{4}/p'.format(datea, config['work_dir'], bbnnyyyy,
+                                                                                  modid, nn)).read())
+            fo.close()
 
- 
+
+def stage_best_file(bbnnyyyy, config):
+    '''
+    This is a generic routine for copying or linking ATCF best track file data from a specific location
+    to a directory where calculations are performed.  No matter where these calculations are
+    carried out, this routine must exist.
+
+    The result is a single best track file in the work directory of the format bbnnyyyy.dat, 
+    where bb is the basin, nn is the TC number.
+
+    This particular instance copies data from the NHC data server.  
+
+    Attributes:
+        bbnnyyyy (string):  TC Identification, where bb is the basin, nn is the number, yyyy is year
+        config     (dict):  The dictionary with configuration information
+    '''
+
+    try: #  Look for the data in the real-time directory
+
+        filei = urllib.request.urlopen('{0}/b{1}.dat'.format(
+            config.get('best_dir', 'https://ftp.nhc.noaa.gov/atcf/btk'), bbnnyyyy))
+        fileo = open('{0}/b{1}.dat'.format(config['work_dir'], bbnnyyyy), 'wb')
+        fileo.write(filei.read())
+        filei.close()
+        fileo.close()
+
+    except: #  If the file is not present in the real-time directory, look in the archive.
+
+        src = '{0}/{1}/b{2}.dat.gz'.format(config.get('best_dir_alt', 'https://ftp.nhc.noaa.gov/atcf/archive'),
+                                           bbnnyyyy[4:8], bbnnyyyy)
+
+        #  Unzip the file from the NHC server, write the file to the work directory
+        gzfile = gzip.GzipFile(fileobj=urllib.request.urlopen(src))
+        uzfile = open('{0}/b{1}.dat'.format(config['work_dir'], bbnnyyyy), 'wb')
+        uzfile.write(gzfile.read())
+        gzfile.close()
+        uzfile.close()
+
+
 class ReadGribFiles:
     '''
     This is a generic class that is used to read specific forecast fields from a grib file at a specific
@@ -100,31 +141,21 @@ class ReadGribFiles:
         fhr      (int):  Forecast hour
         config  (dict):  The dictionary with configuration information
     '''
-
     def __init__(self, datea, fhr, config):
 
-        self.init  = dt.datetime.strptime(datea, '%Y%m%d%H')
+        self.init = dt.datetime.strptime(datea, '%Y%m%d%H')
         self.datef = self.init + dt.timedelta(hours=fhr)
 
-#        if ( member > 0 ):
-#            modid = 'p'
-#        else:
-#            modid = 'c'
-#        nn = '%0.2i' % member
-#        return '{0}/gefs{1}/ge{2}{3}_{4}z_pgrb2a'.format(self.src_path,self.datea_str[0:8],modid,nn,self.datea_str[8:10])
-
-        import warnings
         with warnings.catch_warnings():
-            warnings.simplefilter(
-                "ignore", category=xr.coding.variables.SerializationWarning)
+            warnings.simplefilter("ignore", category=xr.coding.variables.SerializationWarning)
 
             file_name = '{0}/gefs{1}/gefs_pgrb2ap5_all_{2}z'.format(config['model_dir'], datea[0:8], datea[8:10])
 
             try:
                 self.ds_dict = xr.open_dataset(file_name)
             except (OSError, RuntimeError):
-                print("Read Error; Sleeping for 60s before trying again")
-                time.sleep(60)
+                print("Read Error; Sleeping before trying again")
+                time.sleep(240)
                 self.ds_dict = xr.open_dataset(file_name)
             except IOError as exc:
                 raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
@@ -134,16 +165,15 @@ class ReadGribFiles:
             try:
                 self.ds_dictb = xr.open_dataset(file_name)
             except (OSError, RuntimeError):
-                print("Read Error; Sleeping for 60s before trying again")
-                time.sleep(60)
+                print("Read Error; Sleeping before trying again")
+                time.sleep(240)
                 self.ds_dictb = xr.open_dataset(file_name)
             except IOError as exc:
                 raise RuntimeError('Failed to open {0}'.format(file_name)) from exc
 
-
         #  Put longitude into -180 to 180 format
-        self.ds_dict.coords['lon']  = (self.ds_dict.coords['lon'] + 180) % 360 - 180
-        self.ds_dictb.coords['lon'] = (self.ds_dictb.coords['lon'] + 180) % 360 - 180
+        self.ds_dict.coords['lon'] = (self.ds_dict.coords['lon'] + 180.) % 360. - 180.
+        self.ds_dictb.coords['lon'] = (self.ds_dictb.coords['lon'] + 180.) % 360. - 180.
 
         #  This is a dictionary that maps from generic variable names to the name of variable in file
         self.var_dict = {'zonal_wind': 'ugrdprs',          \
@@ -156,11 +186,12 @@ class ReadGribFiles:
 
         #print(self.ds_dict)
 
+        self.has_specific_humidity = False
+
         self.nens = int(len(self.ds_dict['hgtprs'].coords['ens']))
 
-
     def set_var_bounds(self, varname, vdict):
-       '''
+        '''
        This is a generic routine that is used to determine the appropriate starting and ending latitude,
        longitude, and if appropriate pressure levels to extract from the grib files.  This routine takes into
        account the order of the coordinate variables.  If the bounds are not specified, the routine uses all
@@ -172,48 +203,55 @@ class ReadGribFiles:
            vdict     (dict):  The dictionary object with variable information
        '''
 
-       vname = self.var_dict[varname]
+        vname = self.var_dict[varname]
 
-       if 'latitude' in vdict:
+        if 'latitude' in vdict:
 
-          if float(self.ds_dict[vname].lat.data[0]) > float(self.ds_dict[vname].lat.data[-1]):
-             vdict['lat_start'] = int(vdict['latitude'][1])
-             vdict['lat_end']   = int(vdict['latitude'][0])
-          else:
-             vdict['lat_start'] = int(vdict['latitude'][0])
-             vdict['lat_end']   = int(vdict['latitude'][1])
+            if float(self.ds_dict[vname].lat.data[0]) > float(self.ds_dict[vname].lat.data[-1]):
+                vdict['lat_start'] = int(vdict['latitude'][1])
+                vdict['lat_end'] = int(vdict['latitude'][0])
+            else:
+                vdict['lat_start'] = int(vdict['latitude'][0])
+                vdict['lat_end'] = int(vdict['latitude'][1])
 
-       else:
+        else:
 
-          latvec = list(self.ds_dict[vname].lat.data)
-          vdict['lat_start'] = latvec[0]
-          vdict['lat_end']   = latvec[-1]
+            try:
+                latvec = list(self.ds_dict[vname].lat.data)
+            except (OSError, RuntimeError):
+                time.sleep(240)
+                latvec = list(self.ds_dict[vname].lat.data)
+            vdict['lat_start'] = latvec[0]
+            vdict['lat_end'] = latvec[-1]
 
-       if 'longitude' in vdict:
+        if 'longitude' in vdict:
 
-          vdict['lon_start'] = int(vdict['longitude'][0])
-          vdict['lon_end']   = int(vdict['longitude'][1])
+            vdict['lon_start'] = int(vdict['longitude'][0])
+            vdict['lon_end'] = int(vdict['longitude'][1])
 
-       else:
+        else:
 
-          lonvec = list(self.ds_dict[vname].lon.data)
-          vdict['lon_start'] = lonvec[0]
-          vdict['lon_end']   = lonvec[-1]
+            try:
+                lonvec = list(self.ds_dict[vname].lon.data)
+            except (OSError, RuntimeError):
+                time.sleep(240)
+                lonvec = list(self.ds_dict[vname].lon.data)
+            vdict['lon_start'] = lonvec[0]
+            vdict['lon_end'] = lonvec[-1]
 
-       if 'isobaricInhPa' in vdict:
+        if 'isobaricInhPa' in vdict:
 
-          if float(self.ds_dict[vname].lev.data[0]) > float(self.ds_dict[vname].lev.data[-1]):
-            vdict['pres_start'] = int(vdict['isobaricInhPa'][1])
-            vdict['pres_end']   = int(vdict['isobaricInhPa'][0])
-          else:
-            vdict['pres_start'] = int(vdict['isobaricInhPa'][0])
-            vdict['pres_end']   = int(vdict['isobaricInhPa'][1])
+            if float(self.ds_dict[vname].lev.data[0]) > float(self.ds_dict[vname].lev.data[-1]):
+                vdict['pres_start'] = int(vdict['isobaricInhPa'][1])
+                vdict['pres_end'] = int(vdict['isobaricInhPa'][0])
+            else:
+                vdict['pres_start'] = int(vdict['isobaricInhPa'][0])
+                vdict['pres_end'] = int(vdict['isobaricInhPa'][1])
 
-       return vdict
-
+        return vdict
 
     def create_ens_array(self, varname, nens, vdict):
-       '''
+        '''
        This is a generic routine that is used to create an xarray object that contains all ensemble
        members for a particular field, with the proper units and coordinate variables.  The resulting
        array has dimensions (ensemble, latitude, longitude).  The routine
@@ -225,33 +263,49 @@ class ReadGribFiles:
            vdict     (dict):  The dictionary object with variable information
        '''
 
-       #  Create attributes based on what is in the file
-       attrlist = {}
-       if 'description' in vdict:
-         attrlist['description'] = vdict['description']
-       if 'units' in vdict:
-         attrlist['units'] = vdict['units']
-       if '_FillValue' in vdict:
-         attrlist['_FillValue'] = vdict['_FillValue']
+        #  Create attributes based on what is in the file
+        attrlist = {}
+        if 'description' in vdict:
+            attrlist['description'] = vdict['description']
+        if 'units' in vdict:
+            attrlist['units'] = vdict['units']
+        if '_FillValue' in vdict:
+            attrlist['_FillValue'] = vdict['_FillValue']
 
-       #  Create an empty xarray that can be used to copy data into
-       lonvec = list(self.ds_dict[self.var_dict[varname]].sel(lon=slice(vdict['lon_start'], vdict['lon_end'])).lon.data)
-       latvec = list(self.ds_dict[self.var_dict[varname]].sel(lat=slice(vdict['lat_start'], vdict['lat_end'])).lat.data)
-       ensarr = xr.DataArray(name='ensemble_data', data=np.zeros([nens, len(latvec), len(lonvec)]),
-                             dims=['ensemble', 'latitude', 'longitude'], attrs=attrlist, 
-                             coords={'ensemble': [i for i in range(nens)], 'latitude': latvec, 'longitude': lonvec}) 
+        #  Create an empty xarray that can be used to copy data into
+        try:
+            lonvec = list(self.ds_dict[self.var_dict[varname]].sel(
+                lon=slice(vdict['lon_start'], vdict['lon_end'])).lon.data).copy()
+        except (OSError, RuntimeError):
+            time.sleep(240)
+            lonvec = list(self.ds_dict[self.var_dict[varname]].sel(
+                lon=slice(vdict['lon_start'], vdict['lon_end'])).lon.data).copy()
+        try:
+            latvec = list(self.ds_dict[self.var_dict[varname]].sel(
+                lat=slice(vdict['lat_start'], vdict['lat_end'])).lat.data).copy()
+        except (OSError, RuntimeError):
+            time.sleep(240)
+            latvec = list(self.ds_dict[self.var_dict[varname]].sel(
+                lat=slice(vdict['lat_start'], vdict['lat_end'])).lat.data).copy()
+        ensarr = xr.DataArray(name='ensemble_data',
+                              data=np.zeros([nens, len(latvec), len(lonvec)]),
+                              dims=['ensemble', 'latitude', 'longitude'],
+                              attrs=attrlist,
+                              coords={
+                                  'ensemble': [i for i in range(nens)],
+                                  'latitude': latvec,
+                                  'longitude': lonvec
+                              })
 
-       return(ensarr)
-
+        return (ensarr)
 
     def read_pressure_levels(self, varname):
 
-       return self.ds_dict[self.var_dict[varname]].lev[:]
-
+        return self.ds_dict[self.var_dict[varname]].lev[:]
 
     #  Function to read a single ensemble member's forecast field
     def read_grib_field(self, varname, member, vdict):
-       '''
+        '''
        This is a generic routine that is used to read a forecast field from a single ensemble member
        based on the information contained within the dictionary vdict.
 
@@ -260,8 +314,9 @@ class ReadGribFiles:
            member     (int):  ensemble member to read from file
            vdict     (dict):  The dictionary object with variable information
        '''
-       import warnings
-       with warnings.catch_warnings():
+        import warnings
+        with warnings.catch_warnings():
+
             warnings.simplefilter("ignore", category=xr.coding.variables.SerializationWarning)
 
             vname = self.var_dict[varname]
@@ -269,47 +324,85 @@ class ReadGribFiles:
             #  Read a single pressure level of data, if this is a variable that has pressure levels
             if 'isobaricInhPa' in vdict:
 
-               #  Rename the lat, lon, and pressure arrays to common convention
-               vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
-                                                lon=slice(vdict['lon_start'], vdict['lon_end']),   \
-                                                lev=slice(vdict['pres_start'], vdict['pres_end']), \
-                                                time=slice(self.datef, self.datef),                \
-                                                ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+                #  Rename the lat, lon, and pressure arrays to common convention
+                try:
+                    vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                    lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                    lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                                    time=slice(self.datef, self.datef),                \
+                                                    ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
+                except (OSError, RuntimeError):
+                    print("Read Field Error; Sleeping before trying again")
+                    time.sleep(240)
+                    vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                    lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                    lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                                    time=slice(self.datef, self.datef),                \
+                                                    ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
 
-               if vdict['pres_start'] != vdict['pres_end']:
+                if vdict['pres_start'] != vdict['pres_end']:
 
-                  for k in range(len(vout[:,0,0])):
+                    for k in range(len(vout[:, 0, 0])):
 
-                     if np.isnan(vout[k,0,0]):
+                        if np.isnan(vout[k, 0, 0]):
 
-                        vout[k,:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
-                                                   lon=slice(vdict['lon_start'], vdict['lon_end']),   \
-                                                   lev=slice(vout.isobaricInhPa.values[k], vout.isobaricInhPa.values[k]), \
-                                                   time=slice(self.datef, self.datef),                \
-                                                   ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
+                            try:
+                                vout[k,:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                           lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                           lev=slice(vout.isobaricInhPa.values[k], vout.isobaricInhPa.values[k]), \
+                                                           time=slice(self.datef, self.datef),                \
+                                                           ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
+                            except (OSError, RuntimeError):
+                                print("Read Field Error; Sleeping before trying again")
+                                time.sleep(240)
+                                vout[k,:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                           lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                           lev=slice(vout.isobaricInhPa.values[k], vout.isobaricInhPa.values[k]), \
+                                                           time=slice(self.datef, self.datef),                \
+                                                           ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
 
-               else:
+                else:
 
-                  if np.isnan(vout[0,0]):
+                    if np.isnan(vout[0, 0]):
 
-                     vout[:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
-                                             lon=slice(vdict['lon_start'], vdict['lon_end']),   \
-                                             lev=slice(vdict['pres_start'], vdict['pres_end']), \
-                                             time=slice(self.datef, self.datef),                \
-                                             ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'})
-
+                        try:
+                            vout[:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                     lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                     lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                                     time=slice(self.datef, self.datef),                \
+                                                     ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
+                        except (OSError, RuntimeError):
+                            print("Read Field Error; Sleeping before trying again")
+                            time.sleep(240)
+                            vout[:,:] = self.ds_dictb[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']),   \
+                                                     lon=slice(vdict['lon_start'], vdict['lon_end']),   \
+                                                     lev=slice(vdict['pres_start'], vdict['pres_end']), \
+                                                     time=slice(self.datef, self.datef),                \
+                                                     ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude','lev': 'isobaricInhPa'}).copy(deep=True)
 
             #  Read the only level if it is a single level variable
             else:
 
-               #  Rename the lat and lon arrays to common convention
-               vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']), \
-                                                lon=slice(vdict['lon_start'], vdict['lon_end']), \
-                                                time=slice(self.datef, self.datef),              \
-                                                ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'})
+                aout = self.ds_dict[vname].sel(ens=slice(member + 1, member + 1)).squeeze().rename({
+                    'lon': 'longitude',
+                    'lat': 'latitude'
+                })
 
-            return(vout)
+                #  Rename the lat and lon arrays to common convention
+                try:
+                    vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']), \
+                                                    lon=slice(vdict['lon_start'], vdict['lon_end']), \
+                                                    time=slice(self.datef, self.datef),              \
+                                                    ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'}).copy(deep=True)
+                except (OSError, RuntimeError):
+                    print("Read 2D Field Error; Sleeping before trying again")
+                    time.sleep(240)
+                    vout  = self.ds_dict[vname].sel(lat=slice(vdict['lat_start'], vdict['lat_end']), \
+                                                    lon=slice(vdict['lon_start'], vdict['lon_end']), \
+                                                    time=slice(self.datef, self.datef),              \
+                                                    ens=slice(member+1, member+1)).squeeze().rename({'lon': 'longitude','lat': 'latitude'}).copy(deep=True)
 
+            return (vout)
 
     @staticmethod
     def __check_file_exists(filename):
@@ -321,6 +414,7 @@ class ReadGribFiles:
             print(err)
 
         return isfile
+
 
 if __name__ == '__main__':
 

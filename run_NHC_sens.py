@@ -42,6 +42,7 @@ def read_config(datea, storm, filename):
     #  Modify work and output directory for specific case/time
     config['work_dir']   = '{0}/{1}.{2}'.format(config['work_dir'],datea,storm)
     config['output_dir'] = '{0}/{1}.{2}'.format(config['output_dir'],datea,storm)
+    config['figure_dir'] = '{0}/{1}.{2}'.format(config['figure_dir'],datea,storm)
     config['storm']      = storm
 
     #  Create appropriate directories
@@ -51,9 +52,16 @@ def read_config(datea, storm, filename):
       except OSError as e:
         raise e
 
-    if not os.path.isdir(config['output_dir']):
+    if (eval(config.get('archive_metric','False')) or eval(config.get('archive_metric','False')) ) and \
+               (not os.path.isdir(config['output_dir'])):
       try:
         os.makedirs(config['output_dir'])
+      except OSError as e:
+        raise e
+
+    if not os.path.isdir(config['figure_dir']):
+      try:
+        os.makedirs(config['figure_dir'])
       except OSError as e:
         raise e
 
@@ -123,36 +131,33 @@ def main():
        bbl = "wp"
 
     bbnnyyyy = "{0}{1}{2}".format(bbl, storm[-3:-1], datea[0:4])
+
+    for handler in logging.root.handlers[:]:
+       logging.root.removeHandler(handler)
     logging.basicConfig(filename='{0}/{1}_{2}.log'.format(config.get('log_dir','.'),str(datea),storm), \
                                filemode='w', format='%(asctime)s;%(message)s')
     logging.warning("STARTING SENSITIVITIES for {0} on {1}".format(bbnnyyyy, str(datea)))
 
 
-    #  Create directories to put output graphics 
-    if ( config.get('webpage','True') == 'True' ):
-       if not os.path.isdir('{0}/{1}.{2}'.format(config['html_dir'],datea,storm)):
-          os.makedirs('{0}/{1}.{2}'.format(config['html_dir'],datea,storm))
-       if not os.path.islink('{0}/{1}.{2}'.format(config['work_dir'],datea,storm)):
-          os.symlink('{0}/{1}.{2}'.format(config['html_dir'],datea,storm), \
-                     '{0}/{1}.{2}'.format(config['work_dir'],datea,storm))
-    
     #  Copy grib and ATCF data to the work directory
     logging.info("Staging Grib Files")
     dpp.stage_grib_files(datea, config)
     logging.info("Staging ATCF Files")
     dpp.stage_atcf_files(datea, bbnnyyyy, config)
+    dpp.stage_best_file(bbnnyyyy, config)
 
 
     #  Read ATCF data into dictionary
     logging.info("Reading ATCF Files")
     atcf = atools.ReadATCFData('{0}/atcf_*.dat'.format(config['work_dir']))
-    btk = atcf.get_best_data(bbnnyyyy)
+    atcf.read_best_data('{0}/b{1}.dat'.format(config['work_dir'],bbnnyyyy))
 
 
     #  Plot the ensemble forecast
-    config['vitals_plot']['track_output_dir'] = config['vitals_plot'].get('track_output_dir', '{0}/{1}.{2}'.format(config['work_dir'],str(datea),storm))
-    config['vitals_plot']['int_output_dir'] = config['vitals_plot'].get('int_output_dir', '{0}/{1}.{2}'.format(config['work_dir'],str(datea),storm))
-    tc.atcf_ens_tc_vitals(atcf, btk, datea, storm, config['model_src'], 50, config['vitals_plot'], config['work_dir'])
+    config['vitals_plot']['track_output_dir'] = config['vitals_plot'].get('track_output_dir', config['figure_dir'])
+    config['vitals_plot']['int_output_dir'] = config['vitals_plot'].get('int_output_dir', config['figure_dir'])
+    tc.plot_ens_tc_track(atcf, storm, datea, config) 
+    tc.plot_ens_tc_intensity(atcf, storm, datea, config)
 
 
     #  Compute TC-related forecast metrics
@@ -163,12 +168,14 @@ def main():
     #  Compute forecast fields at each desired time to use in sensitivity calculation
     logging.info("Computing TC Fiellds")
     for fhr in range(0,int(config['fcst_hour_max'])+int(config['fcst_hour_int']),int(config['fcst_hour_int'])):
-       logging.debug(f"Computing Sensitivity {fhr}")
+
+       logging.debug(f"Computing Fields {fhr}")
        tcf.ComputeTCFields(datea, fhr, atcf, config)
 
 
     logging.info("Computing Sensitivity")
     #  Compute sensitivity of each metric to forecast fields at earlier times, as specified by the user
+    logging.info("Computing Sensitivity")
     metlist = [e.strip() for e in config['sens']['metrics'].split(',')]
     for i in range(len(metlist)):
 
@@ -183,9 +190,16 @@ def main():
           sens.ComputeSensitivity(datea, fhr, metlist[i], atcf, config)
 
 
+    with open('{0}/metric_list'.format(config['work_dir']), 'w') as f:
+       for item in metlist:
+          f.write("%s\n" % item)
+    f.close()
+
+
     #  Save some of the files, if needed
     if ( config.get('archive_metric','False') == 'True' ):
-       print("Add capability")
+       for met in metlist:
+          os.rename('{0}/{1}_{2}.nc'.format(config['work_dir'],datea,met), '{0}/.'.format(config['output_dir']))
 
     if ( config.get('archive_fields','False') == 'True' ):
        os.rename('{0}/\*_ens.nc'.format(config['work_dir']), '{0}/.'.format(config['output_dir']))
@@ -196,13 +210,7 @@ def main():
 
     tarout = '{0}/{1}.tar'.format(config['outgrid_dir'],datea) 
     if ( os.path.isfile(tarout) and tarfile.is_tarfile(tarout) ):
-       tar = tarfile.open(tarout) 
-       tar.extractall()
-       tar.close()
-
-    for f in ['usteer', 'vsteer', 'masteer', 'misteer']:
-       for g in glob.glob('{0}/{1}.{2}/*_intmajtrack/sens/{3}/*.nc'.format(config['work_dir'],datea,storm,f)): 
-          shutil.copy(g, '{0}/{1}{2}/.'.format(datea,bbl,storm[-3:-1]))
+       os.system('tar --skip-old-files -xf {0}'.format(tarout))
 
     tar = tarfile.open(tarout, 'w')
     for f in glob.glob('{0}/*/*.nc'.format(datea)):
@@ -211,9 +219,10 @@ def main():
 
 
     #  Clean up work directory, if desired
-#    os.chdir(config['work_dir'] + "../")
-#    if ( config.get('save_work_dir','False') == 'False' ):
-#      shutil.rmtree(config['work_dir'])
+    os.chdir('{0}/..'.format(config['work_dir']))
+    if not eval(config.get('save_work_dir','False')):
+       shutil.rmtree(config['work_dir'])
+
 
 if __name__ == '__main__':
 
