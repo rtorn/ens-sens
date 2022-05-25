@@ -151,8 +151,8 @@ def set_projection(proj, lon1, lon2, DomDict):
   if proj == 'NorthPolarStereo':
      projinfo = ccrs.NorthPolarStereo(central_longitude=0.0)
   elif proj == 'LambertConformal':
-     projinfo = ccrs.LambertConformal(central_latitude=DomDict['central_latitude'], central_longitude=DomDict['central_longitude'], \
-                                      standard_parallels=(DomDict['standard_parallel1'], DomDict['standard_parallel2']))
+     projinfo = ccrs.LambertConformal(central_latitude=float(DomDict['central_latitude']), central_longitude=float(DomDict['central_longitude']), \
+                                      standard_parallels=(float(DomDict['standard_parallel1']), float(DomDict['standard_parallel2'])))
   elif (lon1 < 180. and lon2 > 180.):
      projinfo = ccrs.PlateCarree(central_longitude=180.)
   else:
@@ -213,6 +213,27 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
      circle = mpath.Path(verts * radius + center)
 
      ax.set_boundary(circle, transform=ax.transAxes)  #without this; get rect bound 
+
+  elif proj == 'LambertConformal':
+
+     if lon1 > 180. or lon2 > 180.:
+       lon1 = lon1 - 360.
+       lon2 = lon2 - 360.
+
+     gridInt = float(DomDict.get('grid_interval', 10.))
+
+     gl = ax.gridlines(crs=ccrs.PlateCarree(), draw_labels=True,
+                     linewidth=1, color='gray', alpha=0.5, linestyle='-')
+     gl.top_labels = None
+     gl.bottom_labels = None
+     gl.left_labels = None
+     gl.right_labels = None
+     gl.xlocator = mticker.FixedLocator(np.arange(-180.,180.,gridInt))
+     gl.xformatter = LONGITUDE_FORMATTER
+     gl.xlabel_style = {'size': 12, 'color': 'gray'}
+     gl.ylocator = mticker.FixedLocator(np.arange(-90.+gridInt,90.,gridInt))
+     gl.yformatter = LATITUDE_FORMATTER
+     gl.ylabel_style = {'size': 12, 'color': 'gray'}
 
   else:
 
