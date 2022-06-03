@@ -108,18 +108,18 @@ def haversine_distance_angle(lat1, lon1, lat2, lon2):
     return distance
 
 def remove_TC_circulation(u_wind, v_wind, tc_location, radius_km):
-  '''
-  Function to remove the TC from the 3D wind field based on the method of
-  Galarneau and Davis (2013).  The function computes the vorticity and divergence
-  within a certain distance of the TC, inverts that wind field (assumed to be the
-  TC-related wind), and subtracts this from the total wind.
+    '''
+    Function to remove the TC from the 3D wind field based on the method of
+    Galarneau and Davis (2013).  The function computes the vorticity and divergence
+    within a certain distance of the TC, inverts that wind field (assumed to be the
+    TC-related wind), and subtracts this from the total wind.
 
-  Attributes:
-      u_wind (xarray DataArray):  zonal component of the wind (pressure, lat, lon order)
-      v_wind (xarray DataArray):  meridional component of the wind (pressure, lat, lon order)
-      tc_location (float):        latitude/longitude of the TC in the model
-      radius_km (float):          radius over which to remove TC vorticity and divergence
-  '''
+    Attributes:
+        u_wind (xarray DataArray):  zonal component of the wind (pressure, lat, lon order)
+        v_wind (xarray DataArray):  meridional component of the wind (pressure, lat, lon order)
+        tc_location (float):        latitude/longitude of the TC in the model
+        radius_km (float):          radius over which to remove TC vorticity and divergence
+    '''
 
     ws_wnd = ExtendedVectorWind(u_wind, v_wind)
 
