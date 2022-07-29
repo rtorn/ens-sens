@@ -263,7 +263,7 @@ class ReadATCFData:
         '''
 
         try:
-          self.bestdf = pd.read_csv(filepath_or_buffer=bestfile, header=None, usecols=range(10))
+          self.bestdf = pd.read_csv(filepath_or_buffer=bestfile, header=None, usecols=range(11))
           self.bestdf.columns = self.cols[0:len(self.bestdf.columns)]
           self.has_best = True
         except:
