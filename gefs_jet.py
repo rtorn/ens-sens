@@ -66,6 +66,30 @@ def stage_grib_files(datea, config):
              falt = '{0}/pgrb2b/{1}/{2}'.format(config['model_dir'],fdir,fbase)
              os.system('wgrib2 -s {0} | grep -e \"TMP:300 mb\" -e \"TMP:400 mb\" -e \"RH:300 mb\" -e \"RH:400 mb\" | wgrib2 -fix_ncep -i -append {0} -grib {1}'.format(falt,fout))
 
+    #  Grab precipitation ooutput at more frequent intervals
+    fmin = config.get('precip_hour_min', 6)
+    freq = config.get('precip_hour_int', 12)
+    fmax = config.get('precip_hour_max', -12)  
+
+    for fhr in range(fmin, int(fmax)+int(freq), int(freq)):
+
+       fbase = "{0}000{1}".format(init_s, '%0.3i' % fhr)
+       fout  = '{0}/f{1}.grb2'.format(config['work_dir'],'%0.3i' % fhr)
+
+       if not os.path.isfile(fout):
+
+          for n in range(int(config['num_ens'])+1):
+
+             #  Construct the grib file dictionary for a particular forecast hour
+             if n > 0:
+                fdir = "gep{0}".format('%0.2i' % n)
+             else:
+                fdir = "gec00"
+
+             #  read a few extra fields from the alternate files
+             falt = '{0}/{1}/{2}'.format(config['model_dir'],fdir,fbase)
+             os.system('wgrib2 -s {0} | grep -e \"APCP\" | wgrib2 -fix_ncep -i -append {0} -grib {1}'.format(falt,fout))
+
 
 def stage_atcf_files(datea, bbnnyyyy, config):
     '''
@@ -87,15 +111,29 @@ def stage_atcf_files(datea, bbnnyyyy, config):
         config     (dict):  The dictionary with configuration information
     '''
 
-    src  = '{0}/{1}.a{2}.dat'.format(config['atcf_dir'],datea,bbnnyyyy)
+#    src  = '{0}/a{1}.dat.gz'.format(config['atcf_dir'],bbnnyyyy)
+#    nens = int(config['num_ens'])
 
-    #  Wait for the ensemble ATCF information to be placed in the file
-    while ( len(os.popen('sed -ne /AP/p {0}/{1}.a{2}.dat'.format(config['atcf_dir'],datea,bbnnyyyy)).read()) == 0 ):
-       time.sleep(20.7)
+    #  Unzip the file from the NHC server, write the file to the work directory
+#    gzfile = gzip.GzipFile(fileobj=urllib.request.urlopen(src))
+#    uzfile = open('{0}/a{1}.dat'.format(config['work_dir'],bbnnyyyy), 'wb')
+#    uzfile.write(gzfile.read())
+#    gzfile.close()
+#    uzfile.close()
 
-    #  Wait for the file to be finished being copied
-    while ( (time.time() - os.path.getmtime(src)) < 60 ):
-       time.sleep(10)
+    init    = dt.datetime.strptime(datea, '%Y%m%d%H')
+    datef   = init + dt.timedelta(hours=6)
+
+    src  = '{0}/{1}.a{2}.dat'.format(config['atcf_dir'],datef.strftime('%Y%m%d%H'),bbnnyyyy)
+    print('ATCF file',datef.strftime('%Y%m%d%H'),src)
+
+#    #  Wait for the ensemble ATCF information to be placed in the file
+#    while ( len(os.popen('sed -ne /AP/p {0}/{1}.a{2}.dat'.format(config['atcf_dir'],datea,bbnnyyyy)).read()) == 0 ):
+#       time.sleep(20.7)
+
+#    #  Wait for the file to be finished being copied
+#    while ( (time.time() - os.path.getmtime(src)) < 60 ):
+#       time.sleep(10)
 
     for n in range(int(config['num_ens']) + 1):
 
@@ -111,7 +149,8 @@ def stage_atcf_files(datea, bbnnyyyy, config):
        if not os.path.isfile(file_name):
 
           fo = open(file_name,"w")
-          fo.write(os.popen('sed -ne /{0}/p {1}/{0}.a{2}.dat | sed -ne /{3}{4}/p'.format(datea,config['atcf_dir'],bbnnyyyy,modid,nn)).read())
+#          fo.write(os.popen('sed -ne /{0}/p {1}/a{2}.dat | sed -ne /{3}{4}/p'.format(datea,config['work_dir'],bbnnyyyy,modid,nn)).read())
+          fo.write(os.popen('sed -ne /{0}/p {1} | sed -ne /{2}{3}/p'.format(datea,src,modid,nn)).read())
           fo.close()
 
 
@@ -214,8 +253,6 @@ class ReadGribFiles:
            self.has_specific_humidity = True
         else:
            self.has_specific_humidity = False
-
-        self.has_total_precip = False
 
         self.nens = int(self.grib_dict['gh_pf'].attrs['GRIB_totalNumber']) + 1
 
