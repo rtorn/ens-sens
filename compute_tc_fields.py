@@ -99,6 +99,7 @@ class ComputeTCFields:
         #  Compute steering wind components
         uoutfile='{0}/{1}_f{2}_usteer_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         voutfile='{0}/{1}_f{2}_vsteer_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
+        stfnfile='{0}/{1}_f{2}_ssteer_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         vortfile='{0}/{1}_f{2}_csteer_ens.nc'.format(config['work_dir'],str(self.datea_str),self.fff)
         if (not os.path.isfile(uoutfile) or not os.path.isfile(voutfile)) and config['fields'].get('calc_uvsteer','True') == 'True':
 
@@ -117,6 +118,11 @@ class ComputeTCFields:
                      'description': 'meridional steering wind', 'units': 'm/s', '_FillValue': -9999.}
           outDict = g1.set_var_bounds('meridional_wind', outDict)
           vensmat = g1.create_ens_array('meridional_wind', self.nens, outDict)       
+
+          outDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2),
+                     'description': 'steering wind streamfunction', 'units': 'm2/s', '_FillValue': -9999.}
+          outDict = g1.set_var_bounds('meridional_wind', outDict)
+          sensmat = g1.create_ens_array('meridional_wind', self.nens, outDict)
 
           outDict = {'latitude': (lat1, lat2), 'longitude': (lon1, lon2),
                      'description': 'steering wind vorticity', 'units': '1/s', '_FillValue': -9999.}
@@ -175,6 +181,11 @@ class ComputeTCFields:
              uensmat[n,:,:] = usteer[:,:]
              vensmat[n,:,:] = vsteer[:,:]
 
+             #  Compute the streamfunction of the steering wind
+             psi = surgery.wind_streamfunction(np.squeeze(uint) / abs(pres[-1]-pres[0]), np.squeeze(vint) / abs(pres[-1]-pres[0]))
+             psi[:,:] = psi[:,:] - np.mean(psi)
+             sensmat[n,:,:] = np.squeeze(psi.sel(latitude=slice(slat1, slat2), longitude=slice(lon1, lon2))) * 1.0e-6
+
              #  Compute the vorticity associated with the steering wind
              lat  = usteer.latitude.values
              lon  = usteer.longitude.values
@@ -184,6 +195,7 @@ class ComputeTCFields:
 
           uensmat.to_netcdf(uoutfile, encoding=dencode)
           vensmat.to_netcdf(voutfile, encoding=dencode) 
+          sensmat.to_netcdf(stfnfile, encoding=dencode)
           vortmat.to_netcdf(vortfile, encoding=dencode)
 
         else:

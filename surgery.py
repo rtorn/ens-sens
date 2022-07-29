@@ -140,3 +140,17 @@ def remove_TC_circulation(u_wind, v_wind, tc_location, radius_km):
     v_wind[:,:,:] = v_wind[:,:,:] - vout[:,:,:]
 
     return u_wind, v_wind
+
+
+def wind_streamfunction(u_wind, v_wind):
+    '''
+    Function to compute the streamfunction of the wind based on the zonal and 
+    meridional wind.
+
+    Attributes:
+        u_wind (xarray DataArray):  zonal component of the wind (lat, lon order)
+        v_wind (xarray DataArray):  meridional component of the wind (lat, lon order)
+    '''
+
+    ws_wnd = ExtendedVectorWind(u_wind, v_wind)
+    return ws_wnd.streamfunction()

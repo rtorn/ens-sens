@@ -232,7 +232,38 @@ class ComputeSensitivity:
         plotVecSens(lat, lon, sens, umea, vmea, sigv, '{0}/{1}_f{2}_masteer_sens.png'.format(outdir,datea,fhrt), stceDict)
 
 
-      #  Read 250 hPa PV, compute sensitivity to that field, if the file exists
+      #  Read steering flow streamfunction, compute sensitivity to that field, if the file exists
+      ensfile = '{0}/{1}_f{2}_ssteer_ens.nc'.format(config['work_dir'],datea,fhrt)
+      if os.path.isfile(ensfile):
+
+         ds = xr.open_dataset(ensfile)
+         ens = ds.ensemble_data.sel(latitude=slice(lat1, lat2), longitude=slice(lon1, lon2)).squeeze()
+         lat = ens.latitude.values
+         lon = ens.longitude.values
+         emea  = np.mean(ens, axis=0)
+         emea.attrs['units'] = ds.ensemble_data.attrs['units']
+         evar = np.var(ens, axis=0)
+
+         sens, sigv = computeSens(ens, emea, evar, metric)
+         sens[:,:] = sens[:,:] * np.sqrt(evar[:,:])
+
+         outdir = '{0}/{1}/sens/ssteer'.format(config['figure_dir'],metname)
+         if not os.path.isdir(outdir):
+            os.makedirs(outdir)
+
+         plotDict['meanCntrs'] = np.arange(-100, 104, 4)
+         plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_ssteer_sens.png'.format(outdir,datea,fhrt), plotDict)
+
+         if e_cnt > 0:
+            outdir = '{0}/{1}/sens_sc/ssteer'.format(config['figure_dir'],metname)
+            if not os.path.isdir(outdir):
+              os.makedirs(outdir)
+
+            stceDict['meanCntrs'] = plotDict['meanCntrs']
+            plotScalarSens(lat, lon, sens, emea, sigv, '{0}/{1}_f{2}_ssteer_sens.png'.format(outdir,datea,fhrt), stceDict)
+
+
+      #  Read steering flow vorticity, compute sensitivity to that field, if the file exists
       ensfile = '{0}/{1}_f{2}_csteer_ens.nc'.format(config['work_dir'],datea,fhrt)
       ds = xr.open_dataset(ensfile)
       ens = ds.ensemble_data.sel(latitude=slice(lat1, lat2), longitude=slice(lon1, lon2)).squeeze()
