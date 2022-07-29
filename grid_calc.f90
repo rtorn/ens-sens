@@ -1,3 +1,40 @@
+!  python -m numpy.f2py -c grid_calc.f90 -m grid_calc
+
+subroutine calc_circ(vort, circrad, dx, nx, ny, circ)
+
+   implicit none
+
+   integer, intent(in) :: nx, ny
+   real, intent(in)    :: vort(ny,nx), circrad, dx
+   real, intent(out)   :: circ(ny,nx)
+
+   integer :: cint, i, ii, j, jj
+   real    :: csum, asum
+
+   cint = nint(circrad / dx)
+
+   do ii = 1, nx
+   do jj = 1, ny
+
+     csum = 0.0
+     asum = 0.0
+     do i = max(ii-cint, 1), min(ii+cint, nx)
+     do j = max(jj-cint, 1), min(jj+cint, ny)
+       if ( sqrt(real(ii-i)**2 + real(jj-j)**2)*dx <= circrad ) then
+         csum = csum + vort(j,i)*dx*dx
+         asum = asum + dx*dx
+       end if
+     end do
+     end do
+     circ(jj,ii) = csum / asum
+
+   end do
+   end do
+
+   return
+end subroutine calc_circ
+
+
 subroutine calc_circ_llgrid(vort, circrad, lat, lon, global, nx, ny, circ)
 
    implicit none
