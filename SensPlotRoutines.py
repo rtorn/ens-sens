@@ -68,7 +68,7 @@ def addDrop(dropfile, plt, plotDict):
 
      elif droptype == 'cw3e':
 
-        ds = pd.read_csv(filepath_or_buffer=dropfile, sep = '\s+', header=None)
+        ds = pd.read_csv(filepath_or_buffer=dropfile, sep = ',', header=None)
         ds.columns = ['year','month','day','hour','minute','latitude','longitude','pressure']
         if eval(plotDict.get('flip_lon','False')):
            ds['longitude'] = (360. - ds['longitude']) % 360
@@ -174,8 +174,8 @@ def background_map(proj, lon1, lon2, lat1, lat2, DomDict):
       DomDict(dict.):  Dictionary that contains plot preferences
   '''
 
-  if 'projection' in DomDict:
-     projinfo = DomDict.get('projection')
+  if 'projinfo' in DomDict:
+     projinfo = DomDict.get('projinfo')
   else:
      projinfo = set_projection(proj, lon1, lon2, DomDict)
 
