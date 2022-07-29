@@ -363,6 +363,11 @@ class ReadGribFiles:
        return(vout)
 
 
+    def close_files(self):
+
+       del self.grib_dict
+
+
 if __name__ == '__main__':
 
     src1 = "/Users/parthpatwari/RA_Atmospheric_Science/Old_Code/atcf_data"
